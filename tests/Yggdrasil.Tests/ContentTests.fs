@@ -914,6 +914,15 @@ let tests =
                 Expect.stringContains errors "title: required field is missing" "the missing title"
             }
 
+            test "a code-fence error and a missing field in one note are both reported" {
+                // Act
+                let errors = loadErrors (note "description: D\ndate: 2024-01-01\n" "```cobol\nX\n```\n")
+
+                // Assert
+                Expect.stringContains errors "code fence language \"cobol\"" "the fence"
+                Expect.stringContains errors "title: required field is missing" "the missing title"
+            }
+
             test "every missing field in a fragrance is reported, not just the first" {
                 // Act
                 let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/sparse.yaml", "rating: 8\n" ])
