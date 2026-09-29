@@ -128,67 +128,55 @@ let main argv =
 
     printfn "Loading content from %s" contentRoot
 
-    match SiteContent.loadWithHighlighter paths with
+    match SiteContent.load paths with
     | Error errors -> reportErrors "Content load" errors
-    | Ok(content, highlighter) ->
+    | Ok content ->
         printfn
             "  %d notes, %d projects, %d fragrances"
             content.Notes.Length
             content.Projects.Length
             content.Fragrances.Length
 
-        let fallbacks = Highlight.fallbacks highlighter
+        if Directory.Exists distDir then
+            Directory.Delete(distDir, true)
 
-        fallbacks
-        |> List.iter (fun e -> eprintfn "  highlight fallback: %s [%s] — %s" e.SourcePath e.Language e.Reason)
+        Directory.CreateDirectory distDir |> ignore
 
-        if not (List.isEmpty fallbacks) then
-            eprintfn "Build failed: %d code fence(s) could not be highlighted." fallbacks.Length
-            eprintfn "  Tag the fence with a supported language, leave it untagged for a plain"
-            eprintfn "  block, or add a grammar to assets/grammars/ and register it in Highlight.fs."
-            eprintfn "  Supported: %s" (String.concat ", " Highlight.supportedLanguages)
-            1
-        else
-            if Directory.Exists distDir then
-                Directory.Delete(distDir, true)
+        let assets =
+            try
+                printfn "Copying static assets ..."
+                copyDir staticRoot distDir
 
-            Directory.CreateDirectory distDir |> ignore
-
-            let assets =
-                try
-                    printfn "Copying static assets ..."
-                    copyDir staticRoot distDir
-
-                    if generator.SkipAssets then
-                        printfn "SKIP_ASSETS set — skipping CSS/JS and OG-card build."
-                        Ok()
-                    else
-                        printfn "Building CSS/JS (standalone tailwind + esbuild) ..."
-                        Assets.build binDir assetsDir distDir
-
-                        printfn "Generating OG share cards ..."
-                        let fontsDir = Path.Combine(assetsDir, "fonts")
-                        OgImage.generateAll config fontsDir distDir content.Notes content.Projects
-                with ex ->
-                    Error [ Util.exceptionDetail ex ]
-
-            match assets with
-            | Error errors -> reportErrors "Assets" errors
-            | Ok() ->
-
-            match writeSite config content distDir with
-            | Error errors -> reportErrors "Rendering" errors
-            | Ok() ->
-
-            let verified =
                 if generator.SkipAssets then
+                    printfn "SKIP_ASSETS set — skipping CSS/JS and OG-card build."
                     Ok()
                 else
-                    printfn "Verifying every reference resolves ..."
-                    verifyReferences distDir
+                    printfn "Building CSS/JS (standalone tailwind + esbuild) ..."
+                    Assets.build binDir assetsDir distDir
 
-            match verified with
-            | Error errors -> reportErrors "Output verification" errors
-            | Ok() ->
-                printfn "Done. Output in %s" distDir
-                0
+                    printfn "Generating OG share cards ..."
+                    let fontsDir = Path.Combine(assetsDir, "fonts")
+                    OgImage.generateAll config fontsDir distDir content.Notes content.Projects
+            with ex ->
+                Error [ Util.exceptionDetail ex ]
+
+        match assets with
+        | Error errors -> reportErrors "Assets" errors
+        | Ok() ->
+
+        match writeSite config content distDir with
+        | Error errors -> reportErrors "Rendering" errors
+        | Ok() ->
+
+        let verified =
+            if generator.SkipAssets then
+                Ok()
+            else
+                printfn "Verifying every reference resolves ..."
+                verifyReferences distDir
+
+        match verified with
+        | Error errors -> reportErrors "Output verification" errors
+        | Ok() ->
+            printfn "Done. Output in %s" distDir
+            0

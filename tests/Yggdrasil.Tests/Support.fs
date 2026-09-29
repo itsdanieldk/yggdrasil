@@ -26,10 +26,12 @@ let config =
     | Ok c -> c
     | Error errs -> failwithf "site config failed:\n%s" (String.concat "\n" errs)
 
-let content, highlighter =
-    match SiteContent.loadWithHighlighter contentPaths with
-    | Ok result -> result
+let content =
+    match SiteContent.load contentPaths with
+    | Ok content -> content
     | Error errs -> failwithf "content load failed:\n%s" (String.concat "\n" errs)
+
+let highlighter = Highlight.create contentPaths.GrammarRoot
 
 let renderNode (node: XmlNode) =
     RenderView.AsString.htmlNode node

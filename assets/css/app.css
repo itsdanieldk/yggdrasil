@@ -98,15 +98,6 @@ article pre {
   word-wrap: break-word;
 }
 
-html.dark .tm {
-  background-color: var(--tm-dark-bg) !important;
-}
-
-html.dark .tm code,
-html.dark .tm span {
-  color: var(--tm-dark) !important;
-}
-
 @keyframes reveal {
   from {
     opacity: 0;

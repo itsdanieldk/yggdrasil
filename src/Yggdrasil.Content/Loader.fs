@@ -102,7 +102,7 @@ module SiteContent =
         result {
             let! frontmatter, rawBody = Parser.split path (File.ReadAllText path)
             let! dto = Parser.deserialize path frontmatter
-            let renderedBody = renderer.Render(path, rawBody) |> Result.mapError List.singleton
+            let renderedBody = renderer.Render(path, rawBody)
             let! () = Yaml.rejectUnknownKeys path allowed frontmatter
             and! entry = decode path id dto rawBody renderedBody
             return entry
@@ -171,12 +171,5 @@ module SiteContent =
         | notes, projects, fragrances, pages, validationErrors ->
             Error(errorsOf notes @ errorsOf projects @ errorsOf fragrances @ errorsOf pages @ validationErrors)
 
-    let loadWithHighlighter (paths: ContentPaths) =
-        let highlighter = Highlight.create paths.GrammarRoot
-        let renderer = Markdown.Renderer highlighter
-        build renderer paths
-        |> Result.map (fun content -> content, highlighter)
-
     let load (paths: ContentPaths) =
-        loadWithHighlighter paths
-        |> Result.map fst
+        build (Markdown.Renderer(Highlight.create paths.GrammarRoot)) paths

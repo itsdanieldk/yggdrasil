@@ -154,14 +154,13 @@ effective immediately); revert the commit afterwards — restore the site first,
 - **Every name under `content/` becomes a URL, so it must be a slug**: lowercase letters, digits and single
   hyphens. Whatever the loader would otherwise pass over fails the build instead — a stray file, an
   `Index.md`, a `.yml` fragrance, an unknown folder or page. Names starting with a dot are ignored.
-- Highlighting emits light colours inline and dark ones as `--tm-dark*` variables that `app.css`
-  promotes under `html.dark`. Both slots are Catppuccin Frappé (`Themes` in `Highlight.fs`), so code
-  looks the same in either site theme — hence the copy button is styled light-on-dark unconditionally.
+- Highlighting uses one theme, Catppuccin Frappé, in both site themes: its colours are emitted inline and
+  need no dark-mode CSS, and the copy button is styled light-on-dark unconditionally.
 - **Source PNGs must live next to their Markdown** in `content/`, not in a subfolder: the image rewrite
   reads their real dimensions at build time and points the rendered `<img>` at the prebuilt `.webp` under
   `static/images/`, named after the file alone.
-- `assets/css/app.css` carries two edits over a stock Tailwind entry — the `@source` scan of
-  `src/Yggdrasil.Web`, and the dark-mode block targeting the `.tm` highlight wrapper.
+- `assets/css/app.css` carries one edit over a stock Tailwind entry: the `@source` scan of
+  `src/Yggdrasil.Web`, which is how the class names in the F# views reach the stylesheet.
 - The footer year is frozen at generate time; rebuild to refresh it.
 - **OG share cards render from TTF, not the WOFF2 the site serves.** `SkiaSharp.NativeAssets.Linux.NoDependencies`
   ships without Brotli, so `SKTypeface.FromFile` can't decode WOFF2 on Linux. The three faces the cards

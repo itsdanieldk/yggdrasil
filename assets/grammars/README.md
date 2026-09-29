@@ -37,10 +37,9 @@ not registered, so the include is inert and `///` comments get no nested Markdow
 | ---- | ------ | ------- |
 | `catppuccin-frappe.json` | [shikijs/textmate-grammars-themes](https://github.com/shikijs/textmate-grammars-themes/blob/main/packages/tm-themes/themes/catppuccin-frappe.json) | MIT |
 
-Frappé is the only flavour shipped and fills both slots of the dual-theme emitter, so a code block
-looks the same in either site theme. It is the lightest of the dark Catppuccin flavours (`#303446`),
-which keeps it from reading as a harsh black rectangle on the light canvas. See the highlighting note
-in the [root README](../../README.md) to switch one slot.
+Frappé is the only theme, used in both site themes, so a code block looks the same in either. It is the
+lightest of the dark Catppuccin flavours (`#303446`), which keeps it from reading as a harsh black
+rectangle on the light canvas.
 
 ## Licence
 
