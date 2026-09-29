@@ -38,6 +38,9 @@ module Fragrance =
           fragrance.Rating |> Option.map (fun r -> $"{formatRating r}/10") ]
         |> List.choose id
 
+    let private allowedKeys =
+        set [ "name"; "house"; "url"; "rating"; "note"; "concentration"; "wishlist"; "draft" ]
+
     let private required (path: string) (field: string) (value: string) =
         if isNull value then
             Error $"{path}: {field}: required field is missing"
@@ -60,6 +63,7 @@ module Fragrance =
                 Error $"{path}: invalid YAML: {ex.Message}"
 
         result {
+            let! () = Parser.rejectUnknownKeys path allowedKeys yaml
             let! dto = parsed
             let wishlist = dto.Wishlist.GetValueOrDefault false
 

@@ -121,6 +121,54 @@ let tests =
                 | Ok _ -> failtest "expected Error"
             }
 
+            test "an unknown frontmatter key is an error rather than being ignored" {
+                // Act
+                let result =
+                    Parser.rejectUnknownKeys "content/notes/x/index.md" Parser.noteKeys "title: T\ndrafts: true\n"
+
+                // Assert
+                match result with
+                | Error e ->
+                    Expect.stringContains e "content/notes/x/index.md" "carries the path"
+                    Expect.stringContains e "\"drafts\"" "names the offending key"
+                | Ok() -> failtest "a typo'd key should not be silently dropped"
+            }
+
+            test "every unknown key in the file is named at once" {
+                // Act
+                let result =
+                    Parser.rejectUnknownKeys "n.md" Parser.noteKeys "title: T\ntag: [a]\nupdated: 2024-01-01\n"
+
+                // Assert
+                match result with
+                | Error e ->
+                    Expect.stringContains e "\"tag\"" "names the first"
+                    Expect.stringContains e "\"updated\"" "names the second"
+                | Ok() -> failtest "expected Error"
+            }
+
+            test "the keys each collection actually uses are accepted" {
+                // Arrange
+                let pageFm = "title: T\ndescription: D\nheading: H\nemoji: X\n"
+
+                let noteFm =
+                    "title: T\ndescription: D\ndate: 2024-01-01\nupdatedDate: 2024-02-01\n"
+                    + "tags: [a]\ndraft: true\nfeatured: true\n"
+
+                let projectFm = noteFm + "demoURL: /demo\nrepoURL: https://y.dk\n"
+
+                // Act & Assert
+                Expect.isOk (Parser.rejectUnknownKeys "p.md" Parser.pageKeys pageFm) "page keys"
+                Expect.isOk (Parser.rejectUnknownKeys "n.md" Parser.noteKeys noteFm) "note keys"
+                Expect.isOk (Parser.rejectUnknownKeys "x.md" Parser.projectKeys projectFm) "project keys"
+            }
+
+            test "a key belonging to another collection is not accepted" {
+                // Act & Assert
+                Expect.isError (Parser.rejectUnknownKeys "n.md" Parser.noteKeys "repoURL: x\n") "notes take no repoURL"
+                Expect.isError (Parser.rejectUnknownKeys "p.md" Parser.pageKeys "date: 2024-01-01\n") "pages take no date"
+            }
+
             test "deserialize rejects malformed YAML with the path and a clear message" {
                 // Act
                 let result = Parser.deserialize "bad.md" "tags: [a, b"
@@ -314,6 +362,16 @@ let tests =
                     match withoutUrl with
                     | Error e -> Expect.stringContains e "url" "names the missing url"
                     | Ok _ -> failtest "expected Error for a missing url"
+                }
+
+                test "an unknown key is an error rather than being ignored" {
+                    // Act
+                    let result = Fragrance.decode "x.yaml" "x" (baseYaml "rating: 8\nwishlisted: true")
+
+                    // Assert
+                    match result with
+                    | Error e -> Expect.stringContains e "\"wishlisted\"" "names the offending key"
+                    | Ok _ -> failtest "a typo'd key should not be silently dropped"
                 }
 
                 test "rejects malformed YAML with a clear message" {
@@ -754,6 +812,28 @@ let tests =
                     Directory.Delete(tmp, true)
             }
 
+            test "a misspelled frontmatter key fails the load instead of quietly doing nothing" {
+                // Arrange
+                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-keys-" + Guid.NewGuid().ToString("N"))
+                let noteDir = Path.Combine(tmp, "notes", "typo")
+                Directory.CreateDirectory noteDir |> ignore
+
+                File.WriteAllText(
+                    Path.Combine(noteDir, "index.md"),
+                    "---\ntitle: T\ndescription: D\ndate: 2024-01-01\ndrafts: true\n---\nbody")
+
+                try
+                    // Act
+                    let result = SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
+
+                    // Assert
+                    match result with
+                    | Ok _ -> failtest "expected the typo to fail the load"
+                    | Error errs -> Expect.isTrue (errs |> List.exists (fun e -> e.Contains "\"drafts\"")) "names the key"
+                finally
+                    Directory.Delete(tmp, true)
+            }
+
             test "a note referencing a missing image fails the load (aggregated, not a crash)" {
                 // Arrange
                 let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-img-" + Guid.NewGuid().ToString("N"))
@@ -798,6 +878,12 @@ let tests =
                 // Act & Assert
                 for url in [ "https://x.dk"; "http://x.dk"; "mailto:a@b.dk"; "/notes/foo"; "  https://x.dk  " ] do
                     Expect.isTrue (Util.isSafeUrl url) url
+            }
+
+            test "a protocol-relative URL does not pass as site-relative" {
+                // Act & Assert
+                for url in [ "//evil.dk"; "//evil.dk/notes"; "  //evil.dk  "; "/\\evil.dk" ] do
+                    Expect.isFalse (Util.isSafeUrl url) url
             }
 
             test "rejects anything that would become a live non-navigational link" {
@@ -1121,6 +1207,37 @@ let tests =
                     Expect.stringContains html "alt=\"A shot\"" "alt preserved"
                     Expect.stringContains html "loading=\"lazy\"" "lazy loading added"
                     Expect.isFalse (html.Contains "./shot.png") "the relative source is gone"
+            }
+
+            test "an image with a title is still rewritten, keeping the title" {
+                // Act
+                let result =
+                    renderInTemp "notes" "my-note" (Some("shot.png", smallPng)) "![A shot](./shot.png \"A caption\")"
+
+                // Assert
+                match result with
+                | Error e -> failtestf "expected Ok, got: %s" e
+                | Ok html ->
+                    Expect.stringContains html "src=\"/images/notes/my-note/shot.webp\"" "still rewritten"
+                    Expect.stringContains html "width=\"16\"" "still measured"
+                    Expect.stringContains html "title=\"A caption\"" "the title is carried over"
+                    Expect.isFalse (html.Contains "./shot.png") "the relative source is gone"
+            }
+
+            test "a raw <img> with its own width does not end up with two" {
+                // Arrange
+                let body = "<img src=\"./shot.png\" alt=\"A\" width=\"99\">"
+
+                // Act
+                let result = renderInTemp "notes" "my-note" (Some("shot.png", smallPng)) body
+
+                // Assert
+                match result with
+                | Error e -> failtestf "expected Ok, got: %s" e
+                | Ok html ->
+                    let widths = Regex.Matches(html, "\\bwidth=").Count
+                    Expect.equal widths 1 "exactly one width attribute"
+                    Expect.stringContains html "width=\"16\"" "the PNG's width, which matches its height"
             }
 
             test "absolute sources pass through untouched" {

@@ -25,28 +25,29 @@ module SiteContent =
         else
             []
 
-    let private readEntry (renderer: Markdown.Renderer) (path: string) =
+    let private readEntry (renderer: Markdown.Renderer) (allowed: Set<string>) (path: string) =
         result {
             let id = Path.GetFileName(Path.GetDirectoryName path)
             let contents = File.ReadAllText path
             let! frontmatter, rawBody = Parser.split path contents
+            let! () = Parser.rejectUnknownKeys path allowed frontmatter
             let! dto = Parser.deserialize path frontmatter
             let! renderedBody = renderer.Render(path, rawBody)
             return id, dto, rawBody, renderedBody
         }
 
     let private loadNote (renderer: Markdown.Renderer) (path: string) =
-        readEntry renderer path
+        readEntry renderer Parser.noteKeys path
         |> Result.bind (fun (id, dto, rawBody, renderedBody) ->
             Parser.decodeNote path id dto rawBody renderedBody)
 
     let private loadProject (renderer: Markdown.Renderer) (path: string) =
-        readEntry renderer path
+        readEntry renderer Parser.projectKeys path
         |> Result.bind (fun (id, dto, rawBody, renderedBody) ->
             Parser.decodeProject path id dto rawBody renderedBody)
 
     let private loadPage (renderer: Markdown.Renderer) (path: string) =
-        readEntry renderer path
+        readEntry renderer Parser.pageKeys path
         |> Result.bind (fun (id, dto, _, renderedBody) ->
             Parser.decodePage path id dto (Markdown.staggerParagraphs renderedBody))
 

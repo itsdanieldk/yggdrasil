@@ -160,17 +160,28 @@ let main argv =
 
             Directory.CreateDirectory distDir |> ignore
 
-            printfn "Copying static assets (excluding assets/) ..."
-            copyDir staticRoot distDir (Set [ "assets"; "cache_manifest.json" ]) true
+            let assets =
+                try
+                    printfn "Copying static assets (excluding assets/) ..."
+                    copyDir staticRoot distDir (Set [ "assets"; "cache_manifest.json" ]) true
 
-            if generator.SkipAssets then
-                printfn "SKIP_ASSETS set — skipping CSS/JS and OG-card build."
-            else
-                printfn "Building CSS/JS (standalone tailwind + esbuild) ..."
-                Assets.build binDir assetsDir distDir
+                    if generator.SkipAssets then
+                        printfn "SKIP_ASSETS set — skipping CSS/JS and OG-card build."
+                    else
+                        printfn "Building CSS/JS (standalone tailwind + esbuild) ..."
+                        Assets.build binDir assetsDir distDir
 
-                printfn "Generating OG share cards ..."
-                OgImage.generateAll config (Path.Combine(assetsDir, "fonts")) distDir content.Notes content.Projects
+                        printfn "Generating OG share cards ..."
+                        let fontsDir = Path.Combine(assetsDir, "fonts")
+                        OgImage.generateAll config fontsDir distDir content.Notes content.Projects
+
+                    Ok()
+                with ex ->
+                    Error [ Util.exceptionDetail ex ]
+
+            match assets with
+            | Error errors -> reportErrors "Assets" errors
+            | Ok() ->
 
             match writeSite config content distDir with
             | Error errors -> reportErrors "Rendering" errors

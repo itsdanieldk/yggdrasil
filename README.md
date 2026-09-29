@@ -140,6 +140,8 @@ effective immediately); revert the commit afterwards — restore the site first,
   `fsharp`/`fs`/`f#`, `scala` and `bash`/`shell`/`sh`/`shellscript` — the languages this site uses.
   Leave a fence untagged for a plain block; to add a language see
   [`assets/grammars/README.md`](assets/grammars/README.md).
+- **An unknown frontmatter or fragrance key fails the build**, so `drafts: true` can't silently publish.
+  Each collection accepts only its own keys — a note with `repoURL` is an error too.
 - Highlighting emits light colours inline and dark ones as `--tm-dark*` variables that `app.css`
   promotes under `html.dark`. Both slots are Catppuccin Frappé (`Themes` in `Highlight.fs`), so code
   looks the same in either site theme — hence the copy button is styled light-on-dark unconditionally.

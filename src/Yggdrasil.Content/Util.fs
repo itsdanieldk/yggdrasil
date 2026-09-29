@@ -37,9 +37,17 @@ module Util =
     let isSafeUrl (url: string) =
         let url = url.Trim()
 
-        url.StartsWith "/"
+        let siteRelative =
+            url.StartsWith "/" && not (url.Length > 1 && (url.[1] = '/' || url.[1] = '\\'))
+
+        siteRelative
         || [ "http://"; "https://"; "mailto:" ]
            |> List.exists (fun scheme -> url.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+
+    let rec exceptionDetail (ex: exn) =
+        match ex.InnerException with
+        | null -> ex.Message
+        | inner -> ex.Message + " → " + exceptionDetail inner
 
     let published (isDraft: 'a -> bool) (getDate: 'a -> 'k) (entries: 'a list) =
         entries

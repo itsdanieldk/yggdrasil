@@ -82,7 +82,13 @@ module Markdown =
                 Ok(readBE 16, readBE 20)
 
     let private imgRegex =
-        Regex "<img\\s+src=\"([^\"]*)\"\\s+alt=\"([^\"]*)\"\\s*/?>"
+        Regex "<img\\s[^>]*>"
+
+    let private attrRegex =
+        Regex "([a-zA-Z-]+)=\"([^\"]*)\""
+
+    let private rewrittenAttributes =
+        set [ "src"; "alt"; "loading"; "decoding"; "width"; "height" ]
 
     let private isAbsoluteSrc (src: string) =
         src.StartsWith "/"
@@ -100,8 +106,20 @@ module Markdown =
             imgRegex.Replace(
                 html,
                 fun (m: Match) ->
-                    let src = m.Groups.[1].Value
-                    let alt = m.Groups.[2].Value
+                    let attributes =
+                        [ for a in attrRegex.Matches m.Value -> a.Groups.[1].Value, a.Groups.[2].Value ]
+
+                    let attribute name =
+                        attributes |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
+
+                    let src = defaultArg (attribute "src") ""
+                    let alt = defaultArg (attribute "alt") ""
+
+                    let extra =
+                        attributes
+                        |> List.filter (fun (k, _) -> not (rewrittenAttributes.Contains k))
+                        |> List.map (fun (k, v) -> $" {k}=\"{v}\"")
+                        |> String.concat ""
 
                     if isAbsoluteSrc src then
                         m.Value
@@ -112,7 +130,7 @@ module Markdown =
                         | Ok(width, height) ->
                             let rootname = Path.GetFileNameWithoutExtension file
                             let outSrc = $"/images/{collection}/{slug}/{rootname}.webp"
-                            $"<img alt=\"{alt}\" loading=\"lazy\" decoding=\"async\" width=\"{width}\" height=\"{height}\" src=\"{outSrc}\">"
+                            $"<img alt=\"{alt}\"{extra} loading=\"lazy\" decoding=\"async\" width=\"{width}\" height=\"{height}\" src=\"{outSrc}\">"
                         | Error reason ->
                             errors.Add $"{path}: image \"{src}\": {reason}"
                             m.Value
