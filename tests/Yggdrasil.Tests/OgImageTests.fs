@@ -33,16 +33,9 @@ let private mkTmp () =
     Path.Combine(Path.GetTempPath(), "yggdrasil-og-" + Guid.NewGuid().ToString "N")
 
 let private noteWith id title tags =
-    { Id = id
-      Title = title
-      Description = "d"
-      Date = DateOnly(2024, 1, 1)
-      UpdatedDate = None
-      Body = ""
-      ReadingTime = "1 min read"
-      Tags = tags
-      Draft = false
-      Featured = false }
+    { Fixtures.note id with
+        Title = title
+        Tags = tags }
 
 [<Tests>]
 let tests =
@@ -80,7 +73,7 @@ let tests =
 
             try
                 // Act
-                OgImage.generateAll config fontsDir tmp notes []
+                OgImage.generateAll Fixtures.config fontsDir tmp notes []
 
                 // Assert
                 for n in notes do

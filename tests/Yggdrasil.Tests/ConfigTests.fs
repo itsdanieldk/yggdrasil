@@ -52,20 +52,20 @@ let tests =
 
             test "a bare host is rejected — it would silently produce relative canonicals" {
                 // Act
-                let error = Config.validateBaseUrl "SITE_URL" "itsdaniel.dk" |> expectError "bare host"
+                let error = Config.validateBaseUrl "SITE_URL" "example.com" |> expectError "bare host"
 
                 // Assert
                 Expect.stringContains error "SITE_URL" "names the source"
-                Expect.stringContains error "itsdaniel.dk" "quotes the value"
+                Expect.stringContains error "example.com" "quotes the value"
                 Expect.stringContains error "absolute" "says what is wrong"
             }
 
             test "a typo'd scheme is rejected" {
                 // Act
-                let error = Config.validateBaseUrl "SITE_URL" "htp://itsdaniel.dk" |> expectError "typo scheme"
+                let error = Config.validateBaseUrl "SITE_URL" "htp://example.com" |> expectError "typo scheme"
 
                 // Assert
-                Expect.stringContains error "htp://itsdaniel.dk" "quotes the value"
+                Expect.stringContains error "htp://example.com" "quotes the value"
             }
 
             test "a site-relative base is rejected even though isSafeUrl allows it in an href" {
