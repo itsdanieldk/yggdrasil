@@ -103,11 +103,22 @@ pages:
                 | Error es -> Expect.stringContains (String.concat "\n" es) "author" "whitespace is not a value")
         }
 
-        test "an unknown key is an error rather than being ignored" {
+        test "every unknown top-level key is named, not just the first" {
             // Arrange & Act & Assert
-            withConfig (minimal + "nmae: typo\n") (function
-                | Ok _ -> failtest "a typo'd key should not be silently dropped"
-                | Error es -> Expect.stringContains (String.concat "\n" es) "invalid YAML" "reports the parse failure")
+            withConfig (minimal + "nmae: typo\ntagln: typo\n") (function
+                | Ok _ -> failtest "typo'd keys should not be silently dropped"
+                | Error es ->
+                    let joined = String.concat "\n" es
+                    Expect.stringContains joined "\"nmae\"" "names the first"
+                    Expect.stringContains joined "\"tagln\"" "names the second")
+        }
+
+        test "an empty file is reported as empty, not as a null dereference" {
+            // Arrange & Act & Assert
+            withConfig "" (function
+                | Ok _ -> failtest "an empty site.yaml should not load"
+                | Error es ->
+                    Expect.stringContains (String.concat "\n" es) "YAML file is empty" "says the file is empty")
         }
 
         test "a javascript: URL anywhere in the config is rejected, naming the field" {

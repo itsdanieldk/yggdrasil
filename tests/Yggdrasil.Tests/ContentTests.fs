@@ -14,6 +14,11 @@ let private okOr =
     | Ok value -> value
     | Error error -> failtestf "expected Ok, got Error: %s" (string error)
 
+let private errorText (result: Result<'a, string list>) =
+    match result with
+    | Ok value -> failtestf "expected Error, got Ok %A" value
+    | Error errors -> String.concat "\n" errors
+
 [<Tests>]
 let tests =
     testList "Content" [
@@ -116,35 +121,29 @@ let tests =
                 let result = Parser.split "bad.md" "no frontmatter here"
 
                 // Assert
-                match result with
-                | Error e -> Expect.stringContains e "bad.md" "carries the path"
-                | Ok _ -> failtest "expected Error"
+                Expect.stringContains (errorText result) "bad.md" "carries the path"
             }
 
             test "an unknown frontmatter key is an error rather than being ignored" {
                 // Act
                 let result =
-                    Parser.rejectUnknownKeys "content/notes/x/index.md" Parser.noteKeys "title: T\ndrafts: true\n"
+                    Yaml.rejectUnknownKeys "content/notes/x/index.md" Parser.noteKeys "title: T\ndrafts: true\n"
 
                 // Assert
-                match result with
-                | Error e ->
-                    Expect.stringContains e "content/notes/x/index.md" "carries the path"
-                    Expect.stringContains e "\"drafts\"" "names the offending key"
-                | Ok() -> failtest "a typo'd key should not be silently dropped"
+                let errors = errorText result
+                Expect.stringContains errors "content/notes/x/index.md" "carries the path"
+                Expect.stringContains errors "\"drafts\"" "names the offending key"
             }
 
             test "every unknown key in the file is named at once" {
                 // Act
                 let result =
-                    Parser.rejectUnknownKeys "n.md" Parser.noteKeys "title: T\ntag: [a]\nupdated: 2024-01-01\n"
+                    Yaml.rejectUnknownKeys "n.md" Parser.noteKeys "title: T\ntag: [a]\nupdated: 2024-01-01\n"
 
                 // Assert
-                match result with
-                | Error e ->
-                    Expect.stringContains e "\"tag\"" "names the first"
-                    Expect.stringContains e "\"updated\"" "names the second"
-                | Ok() -> failtest "expected Error"
+                let errors = errorText result
+                Expect.stringContains errors "\"tag\"" "names the first"
+                Expect.stringContains errors "\"updated\"" "names the second"
             }
 
             test "the keys each collection actually uses are accepted" {
@@ -158,15 +157,15 @@ let tests =
                 let projectFm = noteFm + "demoURL: /demo\nrepoURL: https://y.dk\n"
 
                 // Act & Assert
-                Expect.isOk (Parser.rejectUnknownKeys "p.md" Parser.pageKeys pageFm) "page keys"
-                Expect.isOk (Parser.rejectUnknownKeys "n.md" Parser.noteKeys noteFm) "note keys"
-                Expect.isOk (Parser.rejectUnknownKeys "x.md" Parser.projectKeys projectFm) "project keys"
+                Expect.isOk (Yaml.rejectUnknownKeys "p.md" Parser.pageKeys pageFm) "page keys"
+                Expect.isOk (Yaml.rejectUnknownKeys "n.md" Parser.noteKeys noteFm) "note keys"
+                Expect.isOk (Yaml.rejectUnknownKeys "x.md" Parser.projectKeys projectFm) "project keys"
             }
 
             test "a key belonging to another collection is not accepted" {
                 // Act & Assert
-                Expect.isError (Parser.rejectUnknownKeys "n.md" Parser.noteKeys "repoURL: x\n") "notes take no repoURL"
-                Expect.isError (Parser.rejectUnknownKeys "p.md" Parser.pageKeys "date: 2024-01-01\n") "pages take no date"
+                Expect.isError (Yaml.rejectUnknownKeys "n.md" Parser.noteKeys "repoURL: x\n") "notes take no repoURL"
+                Expect.isError (Yaml.rejectUnknownKeys "p.md" Parser.pageKeys "date: 2024-01-01\n") "pages take no date"
             }
 
             test "deserialize rejects malformed YAML with the path and a clear message" {
@@ -174,17 +173,16 @@ let tests =
                 let result = Parser.deserialize "bad.md" "tags: [a, b"
 
                 // Assert
-                match result with
-                | Error e ->
-                    Expect.stringContains e "bad.md" "carries the path"
-                    Expect.stringContains e "invalid YAML frontmatter" "explains the failure"
-                | Ok _ -> failtest "expected Error for malformed YAML"
+                let errors = errorText result
+                Expect.stringContains errors "bad.md" "carries the path"
+                Expect.stringContains errors "invalid YAML frontmatter" "explains the failure"
             }
         ]
 
         testList "decode" [
             let dtoOf yaml = Parser.deserialize "x" yaml |> okOr
-            let noteOf yaml = Parser.decodeNote "content/notes/x/index.md" "x" (dtoOf yaml) "raw body" "<p>rendered</p>"
+            let noteOf yaml =
+                Parser.decodeNote "content/notes/x/index.md" "x" (dtoOf yaml) "raw body" (Ok "<p>rendered</p>")
             let baseFm = "title: Hello\ndescription: A note\ndate: 2024-01-02\n"
 
             test "decodes a note, defaulting the optional fields" {
@@ -211,7 +209,7 @@ let tests =
                 let note = noteOf fm |> okOr
 
                 let project =
-                    Parser.decodeProject "content/projects/x/index.md" "x" (dtoOf fm) "raw body" "<p>rendered</p>"
+                    Parser.decodeProject "content/projects/x/index.md" "x" (dtoOf fm) "raw body" (Ok "<p>rendered</p>")
                     |> okOr
 
                 // Assert
@@ -224,9 +222,7 @@ let tests =
                 let result = noteOf "description: D\ndate: 2024-01-02\n"
 
                 // Assert
-                match result with
-                | Error e -> Expect.stringContains e "title" "names title"
-                | Ok _ -> failtest "expected Error"
+                Expect.stringContains (errorText result) "title" "names title"
             }
 
             test "a missing description is an error naming the field" {
@@ -234,9 +230,7 @@ let tests =
                 let result = noteOf "title: T\ndate: 2024-01-02\n"
 
                 // Assert
-                match result with
-                | Error e -> Expect.stringContains e "description" "names description"
-                | Ok _ -> failtest "expected Error"
+                Expect.stringContains (errorText result) "description" "names description"
             }
 
             test "a missing date is an error" {
@@ -244,9 +238,7 @@ let tests =
                 let result = noteOf "title: T\ndescription: D\n"
 
                 // Assert
-                match result with
-                | Error e -> Expect.stringContains e "date: required date is missing" "names the date field"
-                | Ok _ -> failtest "expected Error"
+                Expect.stringContains (errorText result) "date: required date is missing" "names the date field"
             }
 
             test "reads draft, tags, and an optional updatedDate" {
@@ -267,7 +259,7 @@ let tests =
                 let dto = dtoOf (baseFm + "demoURL: https://demo.example\nrepoURL: https://repo.example\n")
 
                 // Act
-                let p = Parser.decodeProject "p" "x" dto "raw" "rendered" |> okOr
+                let p = Parser.decodeProject "p" "x" dto "raw" (Ok "rendered") |> okOr
 
                 // Assert
                 Expect.equal p.DemoUrl (Some "https://demo.example") "demoUrl"
@@ -279,7 +271,7 @@ let tests =
                 let dto = dtoOf baseFm
 
                 // Act
-                let p = Parser.decodeProject "p" "x" dto "raw" "rendered" |> okOr
+                let p = Parser.decodeProject "p" "x" dto "raw" (Ok "rendered") |> okOr
 
                 // Assert
                 Expect.equal p.DemoUrl None "no demo"
@@ -326,9 +318,7 @@ let tests =
                     let result = Fragrance.decode "x.yaml" "x" (baseYaml "wishlist: true\nrating: 5")
 
                     // Assert
-                    match result with
-                    | Error e -> Expect.stringContains e "wishlist entries must not have a rating" "msg"
-                    | Ok _ -> failtest "expected Error"
+                    Expect.stringContains (errorText result) "wishlist entries must not have a rating" "msg"
                 }
 
                 test "errors when a non-wishlist entry has no rating" {
@@ -336,9 +326,7 @@ let tests =
                     let result = Fragrance.decode "x.yaml" "x" (baseYaml "")
 
                     // Assert
-                    match result with
-                    | Error e -> Expect.stringContains e "rating is required" "msg"
-                    | Ok _ -> failtest "expected Error"
+                    Expect.stringContains (errorText result) "rating is required" "msg"
                 }
 
                 test "errors when a required key is missing" {
@@ -346,9 +334,7 @@ let tests =
                     let result = Fragrance.decode "x.yaml" "x" "name: N\nurl: u\nrating: 5"
 
                     // Assert
-                    match result with
-                    | Error e -> Expect.stringContains e "house" "names the missing key"
-                    | Ok _ -> failtest "expected Error"
+                    Expect.stringContains (errorText result) "house" "names the missing key"
                 }
 
                 test "errors when name or url is missing (not just house)" {
@@ -357,13 +343,8 @@ let tests =
                     let withoutUrl = Fragrance.decode "x.yaml" "x" "name: N\nhouse: Creed\nrating: 5"
 
                     // Assert
-                    match withoutName with
-                    | Error e -> Expect.stringContains e "name" "names the missing name"
-                    | Ok _ -> failtest "expected Error for a missing name"
-
-                    match withoutUrl with
-                    | Error e -> Expect.stringContains e "url" "names the missing url"
-                    | Ok _ -> failtest "expected Error for a missing url"
+                    Expect.stringContains (errorText withoutName) "name" "names the missing name"
+                    Expect.stringContains (errorText withoutUrl) "url" "names the missing url"
                 }
 
                 test "an unknown key is an error rather than being ignored" {
@@ -371,9 +352,7 @@ let tests =
                     let result = Fragrance.decode "x.yaml" "x" (baseYaml "rating: 8\nwishlisted: true")
 
                     // Assert
-                    match result with
-                    | Error e -> Expect.stringContains e "\"wishlisted\"" "names the offending key"
-                    | Ok _ -> failtest "a typo'd key should not be silently dropped"
+                    Expect.stringContains (errorText result) "\"wishlisted\"" "names the offending key"
                 }
 
                 test "rejects malformed YAML with a clear message" {
@@ -381,9 +360,7 @@ let tests =
                     let result = Fragrance.decode "bad.yaml" "bad" "name: [1, 2"
 
                     // Assert
-                    match result with
-                    | Error e -> Expect.stringContains e "invalid YAML" "explains the failure"
-                    | Ok _ -> failtest "expected Error for malformed YAML"
+                    Expect.stringContains (errorText result) "invalid YAML" "explains the failure"
                 }
             ]
 
@@ -531,14 +508,13 @@ let tests =
                     $"name: X\nhouse: Y\nurl: https://example.com\nrating: {rating}\n"
 
                 for bad in [ "42"; "-1"; "10.5" ] do
-                    match Fragrance.decode "f.yaml" "x" (yaml bad) with
-                    | Ok _ -> failtestf "rating %s should be rejected" bad
-                    | Error e -> Expect.stringContains e "outside 0-10" $"names the range for {bad}"
+                    let errors = errorText (Fragrance.decode "f.yaml" "x" (yaml bad))
+                    Expect.stringContains errors "outside 0-10" $"names the range for {bad}"
 
                 for good in [ "0"; "10"; "8.5" ] do
                     match Fragrance.decode "f.yaml" "x" (yaml good) with
                     | Ok f -> Expect.equal f.Rating (Some(float good)) $"{good} is accepted"
-                    | Error e -> failtestf "rating %s should be accepted, got: %s" good e
+                    | Error e -> failtestf "rating %s should be accepted, got: %A" good e
             }
 
             test "formatRating drops the decimal only when the rating is whole" {
@@ -843,6 +819,120 @@ let tests =
                     Expect.isTrue
                         (errs |> List.exists (fun e -> e.Contains "must start with"))
                         "explains the convention"
+            }
+        ]
+
+        testList "every error at once" [
+            let loadErrors files =
+                match Fixtures.withContentRoot files SiteContent.load with
+                | Ok _ -> failtest "expected the load to fail"
+                | Error errors -> String.concat "\n" errors
+
+            let note (frontmatter: string) (body: string) =
+                Fixtures.requiredPageFiles @ [ "notes/n/index.md", $"---\n{frontmatter}---\n{body}" ]
+
+            test "an empty frontmatter block is reported, not a crash" {
+                // Act
+                let errors = loadErrors (note "" "body\n")
+
+                // Assert
+                Expect.stringContains errors "index.md: YAML frontmatter is empty" "names the file and the problem"
+            }
+
+            test "a comment-only frontmatter block is reported, not a crash" {
+                // Act
+                let errors = loadErrors (note "# nothing yet\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "index.md: YAML frontmatter is empty" "names the file and the problem"
+            }
+
+            test "an empty fragrance file is reported, not a crash" {
+                // Act
+                let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/empty.yaml", "" ])
+
+                // Assert
+                Expect.stringContains errors "empty.yaml: YAML file is empty" "names the file and the problem"
+            }
+
+            test "blank required fields are reported as missing" {
+                // Act
+                let errors = loadErrors (note "title: \"\"\ndescription: \" \"\ndate: \" \"\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "title: required field is missing" "a blank title"
+                Expect.stringContains errors "description: required field is missing" "a whitespace description"
+                Expect.stringContains errors "date: required date is missing" "a whitespace date"
+            }
+
+            test "a blank heading falls back to the title and a blank emoji is dropped" {
+                // Arrange
+                let files =
+                    [ "pages/home/index.md",
+                      "---\ntitle: Home\ndescription: D\nheading: \"\"\nemoji: \" \"\n---\nbody\n"
+                      "pages/about/index.md", "---\ntitle: About\ndescription: D\n---\nbody\n" ]
+
+                // Act
+                let home = (Fixtures.withContentRoot files SiteContent.load |> okOr).Pages.["home"]
+
+                // Assert
+                Expect.equal home.Heading "Home" "a blank heading falls back to the title"
+                Expect.equal home.Emoji None "a blank emoji is absent"
+            }
+
+            test "a malformed value names the value, not just the wrapper message" {
+                // Act
+                let yaml = "name: N\nhouse: H\nurl: https://example.com\nrating: 8,5\n"
+                let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/comma.yaml", yaml ])
+
+                // Assert
+                Expect.stringContains errors "8,5" "quotes the value that failed to parse"
+            }
+
+            test "every missing field in a note is reported, not just the first" {
+                // Act
+                let errors = loadErrors (note "description: D\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "title: required field is missing" "the title"
+                Expect.stringContains errors "date: required date is missing" "the date"
+            }
+
+            test "an unknown key and a missing field in one note are both reported" {
+                // Act
+                let errors = loadErrors (note "titel: T\ndescription: D\ndate: 2024-01-01\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "\"titel\"" "the unknown key"
+                Expect.stringContains errors "title: required field is missing" "the missing title"
+            }
+
+            test "an image error and a missing field in one note are both reported" {
+                // Act
+                let errors = loadErrors (note "description: D\ndate: 2024-01-01\n" "![x](./missing.png)\n")
+
+                // Assert
+                Expect.stringContains errors "missing.png" "the image"
+                Expect.stringContains errors "title: required field is missing" "the missing title"
+            }
+
+            test "every missing field in a fragrance is reported, not just the first" {
+                // Act
+                let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/sparse.yaml", "rating: 8\n" ])
+
+                // Assert
+                Expect.stringContains errors "name: required field is missing" "the name"
+                Expect.stringContains errors "house: required field is missing" "the house"
+                Expect.stringContains errors "url: required field is missing" "the url"
+            }
+
+            test "a missing required page is reported alongside other load errors" {
+                // Act
+                let errors = loadErrors [ "notes/n/index.md", "---\ndescription: D\ndate: 2024-01-01\n---\nbody\n" ]
+
+                // Assert
+                Expect.stringContains errors "title: required field is missing" "the broken note"
+                Expect.stringContains errors "content/pages/home/index.md: required page is missing" "the missing page"
             }
         ]
 

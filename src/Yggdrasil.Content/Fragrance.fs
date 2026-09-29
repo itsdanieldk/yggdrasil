@@ -41,42 +41,28 @@ module Fragrance =
     let private allowedKeys =
         set [ "name"; "house"; "url"; "rating"; "note"; "concentration"; "wishlist"; "draft" ]
 
-    let private required (path: string) (field: string) (value: string) =
-        if isNull value then
-            Error $"{path}: {field}: required field is missing"
-        else
-            Ok value
-
-    let private validate (path: string) (wishlist: bool) (rating: float option) =
+    let private validateRating (path: string) (wishlist: bool) (rating: float option) =
         match wishlist, rating with
-        | true, Some _ -> Error $"{path}: wishlist entries must not have a rating"
-        | false, None -> Error $"{path}: rating is required unless wishlist is true"
-        | _, Some r when Double.IsNaN r || r < 0.0 || r > 10.0 ->
-            Error $"{path}: rating {r} is outside 0-10"
-        | _ -> Ok()
+        | true, Some _ -> Error [ $"{path}: wishlist entries must not have a rating" ]
+        | false, None -> Error [ $"{path}: rating is required unless wishlist is true" ]
+        | _, Some r when Double.IsNaN r || r < 0.0 || r > 10.0 -> Error [ $"{path}: rating {r} is outside 0-10" ]
+        | _ -> Ok rating
+
+    let private validateUrl (path: string) (url: string) =
+        if Util.isSafeUrl url then
+            Ok url
+        else
+            Error [ $"{path}: url: \"{url}\" is not an http(s), mailto or site-relative URL" ]
 
     let decode (path: string) (id: string) (yaml: string) =
-        let parsed =
-            try
-                Ok(deserializer.Deserialize<FragranceDto> yaml)
-            with ex ->
-                Error $"{path}: invalid YAML: {ex.Message}"
-
         result {
-            do! Parser.rejectUnknownKeys path allowedKeys yaml
-            let! dto = parsed
+            let! dto = Yaml.parse<FragranceDto> deserializer path "YAML file" yaml
             let wishlist = dto.Wishlist.GetValueOrDefault false
-            let rating = Option.ofNullable dto.Rating
-            do! validate path wishlist rating
-            let! name = required path "name" dto.Name
-            let! house = required path "house" dto.House
-            let! url = required path "url" dto.Url
-
-            let! url =
-                if Util.isSafeUrl url then
-                    Ok url
-                else
-                    Error $"{path}: url: \"{url}\" is not an http(s), mailto or site-relative URL"
+            let! () = Yaml.rejectUnknownKeys path allowedKeys yaml
+            and! name = Util.required path "name" dto.Name
+            and! house = Util.required path "house" dto.House
+            and! url = Util.required path "url" dto.Url |> Result.bind (validateUrl path)
+            and! rating = validateRating path wishlist (Option.ofNullable dto.Rating)
 
             return
                 { Id = id
@@ -84,8 +70,8 @@ module Fragrance =
                   House = house
                   Url = url
                   Rating = rating
-                  Note = Option.ofObj dto.Note
-                  Concentration = Option.ofObj dto.Concentration
+                  Note = Util.optional dto.Note
+                  Concentration = Util.optional dto.Concentration
                   Image = $"/images/fragrances/{id}/bottle.png"
                   Image2x = $"/images/fragrances/{id}/bottle@2x.png"
                   Wishlist = wishlist
