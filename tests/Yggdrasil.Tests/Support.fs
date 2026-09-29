@@ -31,6 +31,12 @@ let content, highlighter =
     | Ok result -> result
     | Error errs -> failwithf "content load failed:\n%s" (String.concat "\n" errs)
 
+let findNote (id: string) =
+    content.Notes |> List.find (fun n -> n.Id = id)
+
+let findProject (id: string) =
+    content.Projects |> List.find (fun p -> p.Id = id)
+
 let renderNode (node: XmlNode) =
     RenderView.AsString.htmlNode node
 

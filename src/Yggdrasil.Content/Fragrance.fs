@@ -63,14 +63,11 @@ module Fragrance =
                 Error $"{path}: invalid YAML: {ex.Message}"
 
         result {
-            let! () = Parser.rejectUnknownKeys path allowedKeys yaml
+            do! Parser.rejectUnknownKeys path allowedKeys yaml
             let! dto = parsed
             let wishlist = dto.Wishlist.GetValueOrDefault false
-
-            let rating =
-                if dto.Rating.HasValue then Some dto.Rating.Value else None
-
-            let! () = validate path wishlist rating
+            let rating = Option.ofNullable dto.Rating
+            do! validate path wishlist rating
             let! name = required path "name" dto.Name
             let! house = required path "house" dto.House
             let! url = required path "url" dto.Url

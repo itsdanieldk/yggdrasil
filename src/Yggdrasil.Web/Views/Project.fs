@@ -26,20 +26,18 @@ module Project =
         Layouts.context config "/projects" (Some meta.Title) (Some meta.Description) (Some "projects") None "website" [ body ]
 
     let show (config: SiteConfig) (project: Project) (prev: Project option) (next: Project option) =
-        let demoUrl, repoUrl = project.DemoUrl, project.RepoUrl
-
         let links =
-            match demoUrl, repoUrl with
+            match project.DemoUrl, project.RepoUrl with
             | None, None -> []
             | _ ->
                 [ nav [ _class "animate flex gap-1" ] [
-                      match demoUrl with
+                      match project.DemoUrl with
                       | Some d -> Components.siteLink { Components.link with External = true } d [ txt "demo" ]
                       | None -> ()
-                      match demoUrl, repoUrl with
+                      match project.DemoUrl, project.RepoUrl with
                       | Some _, Some _ -> span [] [ txt "/" ]
                       | _ -> ()
-                      match repoUrl with
+                      match project.RepoUrl with
                       | Some r -> Components.siteLink { Components.link with External = true } r [ txt "repository" ]
                       | None -> ()
                   ] ]

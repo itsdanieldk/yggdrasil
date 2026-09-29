@@ -7,21 +7,26 @@ module Util =
 
     let private wordsPerMinute = 200.0
 
+    // Order matters: fenced code goes first so nothing inside it is counted, and images go before
+    // links because the link pattern would otherwise leave an image's alt text behind as prose.
+    let private markupStrips =
+        [ @"```.*?```", "", RegexOptions.Singleline
+          @"!\[[^\]]*\]\([^)]*\)", "", RegexOptions.None
+          @"\[([^\]]*)\]\([^)]*\)", "$1", RegexOptions.None
+          @"<[^>]+>", "", RegexOptions.None
+          @"&[#a-z0-9]+;", " ", RegexOptions.IgnoreCase
+          @"[-*_~`#>|\\]", "", RegexOptions.None ]
+
     let slugifyTag (tag: string) =
         let lowered = tag.ToLowerInvariant().Replace("#", "sharp")
         let hyphenated = Regex.Replace(lowered, "[^a-z0-9]+", "-")
         hyphenated.Trim '-'
 
     let readingTime (content: string) =
-        let text =
-            content
-            |> fun s -> Regex.Replace(s, @"```.*?```", "", RegexOptions.Singleline)
-            |> fun s -> Regex.Replace(s, @"!\[[^\]]*\]\([^)]*\)", "")
-            |> fun s -> Regex.Replace(s, @"\[([^\]]*)\]\([^)]*\)", "$1")
-            |> fun s -> Regex.Replace(s, @"<[^>]+>", "")
-            |> fun s -> Regex.Replace(s, @"&[#a-z0-9]+;", " ", RegexOptions.IgnoreCase)
-            |> fun s -> Regex.Replace(s, @"[-*_~`#>|\\]", "")
-            |> fun s -> Regex.Replace(s, @"\n{2,}", " ")
+        let strip (text: string) (pattern: string, replacement: string, options: RegexOptions) =
+            Regex.Replace(text, pattern, replacement, options)
+
+        let text = markupStrips |> List.fold strip content
 
         let wordCount =
             Regex.Split(text.Trim(), @"\s+")
@@ -38,7 +43,7 @@ module Util =
         let url = url.Trim()
 
         let siteRelative =
-            url.StartsWith "/" && not (url.Length > 1 && (url.[1] = '/' || url.[1] = '\\'))
+            url.StartsWith '/' && not (url.Length > 1 && (url.[1] = '/' || url.[1] = '\\'))
 
         siteRelative
         || [ "http://"; "https://"; "mailto:" ]

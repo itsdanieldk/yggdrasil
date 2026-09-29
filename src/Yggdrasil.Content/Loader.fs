@@ -30,7 +30,7 @@ module SiteContent =
             let id = Path.GetFileName(Path.GetDirectoryName path)
             let contents = File.ReadAllText path
             let! frontmatter, rawBody = Parser.split path contents
-            let! () = Parser.rejectUnknownKeys path allowed frontmatter
+            do! Parser.rejectUnknownKeys path allowed frontmatter
             let! dto = Parser.deserialize path frontmatter
             let! renderedBody = renderer.Render(path, rawBody)
             return id, dto, rawBody, renderedBody
