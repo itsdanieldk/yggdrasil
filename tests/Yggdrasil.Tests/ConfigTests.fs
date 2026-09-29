@@ -146,25 +146,4 @@ let tests =
                 Expect.stringContains error "does not exist" "says the path is absent"
             }
         ]
-
-        testList "dist directory" [
-            test "dist resolves directly under the project root" {
-                // Arrange
-                withTempDir [ "global.json"; "site.yaml" ] (fun dir ->
-                    let config =
-                        { Config.ProjectRoot = dir
-                          Config.BaseUrl = "https://example.com/"
-                          Config.SkipAssets = false }
-
-                    // Act
-                    let result = Config.distDirectory config
-
-                    // Assert
-                    match result with
-                    | Ok dist ->
-                        Expect.stringStarts dist (Path.GetFullPath dir) "inside the root"
-                        Expect.stringEnds dist "dist" "named dist"
-                    | Error e -> failtestf "expected Ok, got: %s" e)
-            }
-        ]
     ]

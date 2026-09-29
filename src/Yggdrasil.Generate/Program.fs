@@ -17,6 +17,13 @@ let rec private copyDir (src: string) (dst: string) =
     for dir in Directory.GetDirectories src do
         copyDir dir (Path.Combine(dst, Path.GetFileName dir))
 
+// Emptied rather than overwritten, so a page whose source was deleted can't survive from an earlier build.
+let private recreateDir (dir: string) =
+    if Directory.Exists dir then
+        Directory.Delete(dir, true)
+
+    Directory.CreateDirectory dir |> ignore
+
 let writeSite (config: SiteConfig) (content: SiteContent) (distDir: string) =
     let routes = Route.all content
     printfn "Rendering %d routes ..." routes.Length
@@ -90,57 +97,38 @@ let verifyReferences (distDir: string) =
     else
         problems |> Seq.distinct |> List.ofSeq |> Error
 
-let private reportErrors (label: string) (errors: string list) =
-    eprintfn "%s failed with %d error(s):" label errors.Length
-    errors |> List.iter (eprintfn "  - %s")
-    1
+// Tags a stage's errors with the name main reports them under.
+let private stage (label: string) =
+    Result.mapError (fun (errors: string list) -> label, errors)
 
-[<EntryPoint>]
-let main argv =
-    match Config.resolveProjectRoot argv with
-    | Error error -> reportErrors "Configuration" [ error ]
-    | Ok projectRoot ->
+let private run argv =
+    result {
+        let! projectRoot = Config.resolveProjectRoot argv |> Result.mapError List.singleton |> stage "Configuration"
+        let! siteConfig = Site.load (Path.Combine(projectRoot, "site.yaml")) |> stage "Site config"
+        let! generator = Config.resolve siteConfig.BaseUrl |> Result.mapError List.singleton |> stage "Configuration"
 
-    let sitePath = Path.Combine(projectRoot, "site.yaml")
+        let contentRoot = Path.Combine(projectRoot, "content")
+        let staticRoot = Path.Combine(projectRoot, "static")
+        let assetsDir = Path.Combine(projectRoot, "assets")
+        let binDir = Path.Combine(projectRoot, ".bin")
+        let distDir = Path.Combine(projectRoot, "dist")
 
-    match Site.load sitePath with
-    | Error errors -> reportErrors "Site config" errors
-    | Ok siteConfig ->
+        let paths =
+            { ContentRoot = contentRoot
+              GrammarRoot = Path.Combine(assetsDir, "grammars") }
 
-    match Config.resolve argv siteConfig.BaseUrl with
-    | Error errors -> reportErrors "Configuration" errors
-    | Ok generator ->
+        let config = { siteConfig with BaseUrl = generator.BaseUrl }
 
-    match Config.distDirectory generator with
-    | Error error -> reportErrors "Configuration" [ error ]
-    | Ok distDir ->
+        printfn "Loading content from %s" contentRoot
+        let! content = SiteContent.load paths |> stage "Content load"
 
-    let contentRoot = Path.Combine(projectRoot, "content")
-    let staticRoot = Path.Combine(projectRoot, "static")
-    let assetsDir = Path.Combine(projectRoot, "assets")
-    let binDir = Path.Combine(projectRoot, ".bin")
-
-    let paths =
-        { ContentRoot = contentRoot
-          GrammarRoot = Path.Combine(assetsDir, "grammars") }
-
-    let config = { siteConfig with BaseUrl = generator.BaseUrl }
-
-    printfn "Loading content from %s" contentRoot
-
-    match SiteContent.load paths with
-    | Error errors -> reportErrors "Content load" errors
-    | Ok content ->
         printfn
             "  %d notes, %d projects, %d fragrances"
             content.Notes.Length
             content.Projects.Length
             content.Fragrances.Length
 
-        if Directory.Exists distDir then
-            Directory.Delete(distDir, true)
-
-        Directory.CreateDirectory distDir |> ignore
+        recreateDir distDir
 
         let assets =
             try
@@ -160,13 +148,8 @@ let main argv =
             with ex ->
                 Error [ Util.exceptionDetail ex ]
 
-        match assets with
-        | Error errors -> reportErrors "Assets" errors
-        | Ok() ->
-
-        match writeSite config content distDir with
-        | Error errors -> reportErrors "Rendering" errors
-        | Ok() ->
+        do! assets |> stage "Assets"
+        do! writeSite config content distDir |> stage "Rendering"
 
         let verified =
             if generator.SkipAssets then
@@ -175,8 +158,17 @@ let main argv =
                 printfn "Verifying every reference resolves ..."
                 verifyReferences distDir
 
-        match verified with
-        | Error errors -> reportErrors "Output verification" errors
-        | Ok() ->
-            printfn "Done. Output in %s" distDir
-            0
+        do! verified |> stage "Output verification"
+        return distDir
+    }
+
+[<EntryPoint>]
+let main argv =
+    match run argv with
+    | Ok distDir ->
+        printfn "Done. Output in %s" distDir
+        0
+    | Error(label, errors) ->
+        eprintfn "%s failed with %d error(s):" label errors.Length
+        errors |> List.iter (eprintfn "  - %s")
+        1
