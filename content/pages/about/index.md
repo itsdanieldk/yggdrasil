@@ -1,7 +1,6 @@
 ---
 title: "About"
 description: "About Daniel Larsen, a software engineer from Denmark specializing in functional programming and cloud-native backend systems."
-heading: "About"
 ---
 
 I'm Daniel Larsen, a software engineer from Denmark. F# is my favorite language, Elixir is the one I write most days, and functional programming shapes how I use both.

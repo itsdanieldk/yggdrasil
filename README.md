@@ -5,7 +5,7 @@
 <p><strong>Static site generator for <a href="https://itsdaniel.dk">itsdaniel.dk</a>, written in F#</strong></p>
 
 <p>
-  <a href="https://github.com/itsdanieldk/itsdaniel.dk/actions/workflows/ci.yml"><img src="https://github.com/itsdanieldk/itsdaniel.dk/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/itsdanieldk/yggdrasil/actions/workflows/ci.yml"><img src="https://github.com/itsdanieldk/yggdrasil/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/.NET-10-512BD4.svg?logo=dotnet" alt=".NET 10">
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://itsdaniel.dk"><img src="https://img.shields.io/badge/site-itsdaniel.dk-000000.svg" alt="itsdaniel.dk"></a>
@@ -72,8 +72,8 @@ dotnet test --collect:"XPlat Code Coverage"   # Cobertura under TestResults/
 
 The console app forwards Expecto arguments after `--` (e.g. `-- --filter-test-list feeds`); a new
 `[<Tests>]` module must be registered in `Main.fs` or only the VSTest adapter finds it. `Content` and
-`Web` sit around 90–96% line coverage; `Generate` reads lower — `Assets` downloads binaries and runs
-external processes.
+`Web` sit around 94–97% line coverage; `Generate` reads lower, near 60% — `Assets` downloads binaries
+and runs external processes.
 
 ## Layout
 

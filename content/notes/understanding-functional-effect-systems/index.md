@@ -6,7 +6,7 @@ updatedDate: 2026-09-29
 tags: ["functional programming", "F#", "effect system"]
 ---
 
-[My previous post on functional programming principles](/notes/principles-of-functional-programming) ended with a section called "Separation of Effects": keep your pure logic pure and push side effects to the edges. It's a solid principle, but it depends entirely on discipline. Nothing in the type system stops you from calling a database in the middle of your business logic. You just have to trust yourself, and your team, not to do that.
+[My previous post on functional programming principles](/notes/principles-of-functional-programming) closed its list of principles with "Separation of Effects": keep your pure logic pure and push side effects to the edges. It's a solid principle, but it depends entirely on discipline. Nothing in the type system stops you from calling a database in the middle of your business logic. You just have to trust yourself, and your team, not to do that.
 
 Effect systems take that discipline and make it structural. Instead of performing side effects directly, you describe them as values, and hand execution to a runtime you control.
 
@@ -59,7 +59,7 @@ In F# with FIO:
 ```fsharp
 let initialize = fio {
     let! config = readConfigFile "app.json"
-    let! db = connectToDatabase config.connectionString
+    let! db = connectToDatabase config.ConnectionString
     return (config, db)
 }
 ```
@@ -80,7 +80,7 @@ This composability extends to parallelism. Want both operations to run concurren
 In F# with FIO:
 
 ```fsharp
-let both = fetchUsers.zipPar fetchOrders
+let both = fetchUsers.ZipPar fetchOrders
 ```
 
 And in Scala with ZIO:
@@ -95,9 +95,9 @@ You state the intent; the runtime deals with threads and synchronization.
 
 An effect description is inert. It won't do anything until a runtime interprets it. The runtime is the boundary between your pure, composable program and the messy real world.
 
-This separation has a practical consequence that's easy to overlook: you can change how effects are fulfilled without changing the program itself. In ZIO, you provide different `ZLayer` implementations: production layers that hit real databases, test layers backed by in-memory fakes. In FIO, you can swap the runtime implementation entirely, from the single-threaded `DirectRuntime` (handy for tests) to the work-stealing `WorkStealingRuntime` that is the default. Either way, the program description stays the same. Only the execution environment changes.
+This separation has a practical consequence that's easy to overlook: you can change how effects are fulfilled without changing the program itself. In ZIO, you provide different `ZLayer` implementations: production layers that hit real databases, test layers backed by in-memory fakes. A program's type, `ZIO[R, E, A]`, declares what it needs, and you provide those dependencies when you run it. This is what makes ZIO programs testable without mocking frameworks or runtime DI containers.
 
-This is what makes effect-based programs testable without mocking frameworks or runtime DI containers. Your types declare what a program needs, and you provide those dependencies when you run it.
+FIO's type, `FIO<'A, 'E>`, has no environment parameter. What you can swap there is the runtime itself, from the single-threaded `DirectRuntime` (handy for tests) to the work-stealing `WorkStealingRuntime` that is the default. That changes how effects are scheduled, not what they do: the program description stays the same, and only the execution strategy changes.
 
 ## Concurrency Without the Pain
 
@@ -121,7 +121,7 @@ Effect systems aren't new, but they've matured a lot in the last few years. A ca
 
 **ZIO** is the most prominent in the Scala world. It's batteries-included: dependency injection, typed error handling, streaming, scheduling, and a large standard library. ZIO programs use `ZIO[R, E, A]` where `R` is the environment (dependencies), `E` is the error type, and `A` is the success type. All three are visible in the type signature, so you can see at a glance what a program needs, how it can fail, and what it produces.
 
-**Cats Effect** takes a different path in the same ecosystem. It's built around typeclasses rather than a concrete effect type. Where ZIO is a framework, Cats Effect is more of a standard that libraries build on. It powers http4s, fs2, and doobie, giving you a composable toolkit rather than a single opinionated stack.
+**Cats Effect** takes a different path in the same ecosystem. It ships a concrete `IO` type, but what sets it apart is its typeclasses: libraries are written against them, so they work with any effect type that implements them. Where ZIO is a framework, Cats Effect is more of a standard that libraries build on. It powers http4s, fs2, and doobie, giving you a composable toolkit rather than a single opinionated stack.
 
 **FIO** is my own contribution. I wrote my thesis at DTU in 2022, supervised by [Alceste Scalas](https://people.compute.dtu.dk/~alcsc/), who offered two directions: write a compiler targeting ZIO in Scala, or bring ZIO's ideas to F#, where nothing like it existed. I chose the second. The hardest part wasn't the DSL — it was the runtime. ZIO leans on the JVM's type erasure, while .NET generics are reified, so FIO has to emulate type erasure at runtime to interpret effects of arbitrary types. FIO today has fibers, typed channels, and four interchangeable runtimes, from the single-threaded `DirectRuntime` to the work-stealing default. It's available on [NuGet](https://www.nuget.org/packages/FSharp.FIO), and the [project page](/projects/fio) has the details.
 
