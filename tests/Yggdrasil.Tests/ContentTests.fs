@@ -846,6 +846,119 @@ let tests =
             }
         ]
 
+        testList "every error at once" [
+            let loadErrors files =
+                match Fixtures.withContentRoot files SiteContent.load with
+                | Ok _ -> failtest "expected the load to fail"
+                | Error errors -> String.concat "\n" errors
+
+            let note (frontmatter: string) (body: string) =
+                Fixtures.requiredPageFiles @ [ "notes/n/index.md", $"---\n{frontmatter}---\n{body}" ]
+
+            test "an empty frontmatter block is reported, not a crash" {
+                // Act
+                let errors = loadErrors (note "" "body\n")
+
+                // Assert
+                Expect.stringContains errors "index.md: YAML frontmatter is empty" "names the file and the problem"
+            }
+
+            test "a comment-only frontmatter block is reported, not a crash" {
+                // Act
+                let errors = loadErrors (note "# nothing yet\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "index.md: YAML frontmatter is empty" "names the file and the problem"
+            }
+
+            test "an empty fragrance file is reported, not a crash" {
+                // Act
+                let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/empty.yaml", "" ])
+
+                // Assert
+                Expect.stringContains errors "empty.yaml: YAML file is empty" "names the file and the problem"
+            }
+
+            test "blank required fields are reported as missing" {
+                // Act
+                let errors = loadErrors (note "title: \"\"\ndescription: \" \"\ndate: \" \"\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "title: required field is missing" "a blank title"
+                Expect.stringContains errors "description: required field is missing" "a whitespace description"
+                Expect.stringContains errors "date: required date is missing" "a whitespace date"
+            }
+
+            test "a blank heading falls back to the title and a blank emoji is dropped" {
+                // Arrange
+                let files =
+                    [ "pages/home/index.md", "---\ntitle: Home\ndescription: D\nheading: \"\"\nemoji: \" \"\n---\nbody\n"
+                      "pages/about/index.md", "---\ntitle: About\ndescription: D\n---\nbody\n" ]
+
+                // Act
+                let home = (Fixtures.withContentRoot files SiteContent.load |> okOr).Pages.["home"]
+
+                // Assert
+                Expect.equal home.Heading "Home" "a blank heading falls back to the title"
+                Expect.equal home.Emoji None "a blank emoji is absent"
+            }
+
+            test "a malformed value names the value, not just the wrapper message" {
+                // Act
+                let yaml = "name: N\nhouse: H\nurl: https://example.com\nrating: 8,5\n"
+                let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/comma.yaml", yaml ])
+
+                // Assert
+                Expect.stringContains errors "8,5" "quotes the value that failed to parse"
+            }
+
+            test "every missing field in a note is reported, not just the first" {
+                // Act
+                let errors = loadErrors (note "description: D\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "title: required field is missing" "the title"
+                Expect.stringContains errors "date: required date is missing" "the date"
+            }
+
+            test "an unknown key and a missing field in one note are both reported" {
+                // Act
+                let errors = loadErrors (note "titel: T\ndescription: D\ndate: 2024-01-01\n" "body\n")
+
+                // Assert
+                Expect.stringContains errors "\"titel\"" "the unknown key"
+                Expect.stringContains errors "title: required field is missing" "the missing title"
+            }
+
+            test "an image error and a missing field in one note are both reported" {
+                // Act
+                let errors = loadErrors (note "description: D\ndate: 2024-01-01\n" "![x](./missing.png)\n")
+
+                // Assert
+                Expect.stringContains errors "missing.png" "the image"
+                Expect.stringContains errors "title: required field is missing" "the missing title"
+            }
+
+            test "every missing field in a fragrance is reported, not just the first" {
+                // Act
+                let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/sparse.yaml", "rating: 8\n" ])
+
+                // Assert
+                Expect.stringContains errors "name: required field is missing" "the name"
+                Expect.stringContains errors "house: required field is missing" "the house"
+                Expect.stringContains errors "url: required field is missing" "the url"
+            }
+
+            test "a missing required page is reported alongside other load errors" {
+                // Act
+                let errors = loadErrors [ "notes/n/index.md", "---\ndescription: D\ndate: 2024-01-01\n---\nbody\n" ]
+
+                // Assert
+                Expect.stringContains errors "title: required field is missing" "the broken note"
+                Expect.stringContains errors "content/pages/home/index.md: required page is missing" "the missing page"
+            }
+        ]
+
         testList "isSafeUrl" [
             test "accepts the schemes the site actually renders" {
                 // Act & Assert
