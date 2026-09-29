@@ -120,9 +120,9 @@ deploy. `vercel build` generates the site again, so the job reruns
 [`scripts/check-dist.sh`](scripts/check-dist.sh) on its output — the files that actually ship.
 
 The upload uses `--skip-domain`, so the new deployment is not live yet. The job smoke-tests its unique
-URL — pages, an article, the feed, the stylesheet, the analytics script, the 404 page and the security
-headers — and only then runs `vercel promote`; a deployment that fails the smoke test never reaches the
-domain, and production stays on the previous one.
+URL — pages, an article, the feed, the stylesheet, the 404 page and the security headers — and only
+then runs `vercel promote`; a deployment that fails the smoke test never reaches the domain, and
+production stays on the previous one.
 
 One-time setup:
 
@@ -132,8 +132,6 @@ One-time setup:
 3. Repository secret `VERCEL_AUTOMATION_BYPASS_SECRET` — generate it under **Settings → Deployment
    Protection → Protection Bypass for Automation** and copy the value into a GitHub Actions secret of
    the same name.
-4. Enable **Web Analytics** for the project. Every page loads `/_vercel/insights/script.js`, which 404s
-   while analytics is off, and the smoke test fails the deploy on that 404.
 
 > **Deployment Protection makes the deploy URL 302.** With it enabled, the unique `*.vercel.app`
 > deploy URL redirects unauthenticated requests to an SSO login, so the smoke test would see `302`
@@ -150,6 +148,11 @@ One-time setup:
 > Instant Static serving (which prebuilt static deploys now get) never maps `/` or `/about` back to
 > those paths, so every page 404s. The directory-per-page output doesn't need it: `/about` already
 > serves `about/index.html`.
+
+> **Vercel Web Analytics can't work here.** Vercel adds its `/_vercel/insights/*` routes only to
+> deployments it builds itself, and every deployment here is prebuilt, so the script 404s on every page
+> even with analytics enabled. Reference verification rejects any such path, since nothing in `dist/`
+> serves it.
 
 Roll back by promoting the previous deployment in the Vercel dashboard (an already-built artifact,
 effective immediately); revert the commit afterwards — restore the site first, fix the repo second.

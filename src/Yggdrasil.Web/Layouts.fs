@@ -79,9 +79,6 @@ module Layouts =
       });
     """
 
-    let private vercelStub =
-        """window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };"""
-
     let private headNode (ctx: PageContext) =
         let title' = pageTitle ctx
         let desc = ctx.Description
@@ -150,9 +147,6 @@ module Layouts =
             match ctx.JsonLd with
             | Some jsonLd -> script [ _type "application/ld+json" ] [ rawText jsonLd ]
             | None -> ()
-
-            script [] [ rawText vercelStub ]
-            script [ _defer; _src "/_vercel/insights/script.js" ] []
         ]
 
     let root (ctx: PageContext) =
