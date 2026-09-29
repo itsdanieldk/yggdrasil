@@ -10,7 +10,7 @@ module Tag =
     let private txt = encodedText
 
     let index (config: SiteConfig) (tags: (string * int) list) =
-        let meta = config.Page "tags"
+        let meta = config.Pages.Tags
         let body =
             Components.container [
                 div [ _class "space-y-10" ] [
@@ -28,7 +28,8 @@ module Tag =
                 ]
             ]
 
-        Layouts.context config "/tags" (Some meta.Title) (Some meta.Description) (Some "tags") None "website" [ body ]
+        { Layouts.page config "/tags" meta.Title meta.Description [ body ] with
+            ActivePath = Some "/tags" }
 
     let show (config: SiteConfig) (tag: string) (notes: Note list) (projects: Project list) =
         let slug = Util.slugifyTag tag
@@ -52,4 +53,5 @@ module Tag =
                 ]
             ]
 
-        Layouts.context config $"/tags/{slug}" (Some tag) (Some $"Content tagged \"{tag}\"") (Some "tags") None "website" [ body ]
+        { Layouts.page config $"/tags/{slug}" tag $"Content tagged \"{tag}\"" [ body ] with
+            ActivePath = Some "/tags" }

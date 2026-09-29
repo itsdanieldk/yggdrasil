@@ -14,20 +14,17 @@ type ArticleMeta =
 type PageContext =
     { Config: SiteConfig
       CanonicalPath: string
-      PageTitle: string option
-      PageDescription: string option
+      Title: string
+      Description: string
       OgType: string
       OgImage: string option
       JsonLd: string option
-      ActiveSection: string option
+      ActivePath: string option
       Content: XmlNode list
       Article: ArticleMeta option
       NoIndex: bool }
 
 module Layouts =
-
-    let private notFoundTitle = "Page Not Found"
-    let private notFoundDescription = "The page you're looking for doesn't exist."
 
     let private homeTitle (config: SiteConfig) =
         $"{config.Name} — {config.Author} · {config.Tagline}"
@@ -36,10 +33,7 @@ module Layouts =
         if ctx.CanonicalPath = "/" then
             homeTitle ctx.Config
         else
-            $"{defaultArg ctx.PageTitle notFoundTitle} | {ctx.Config.Name}"
-
-    let pageDescription (ctx: PageContext) =
-        defaultArg ctx.PageDescription notFoundDescription
+            $"{ctx.Title} | {ctx.Config.Name}"
 
     let canonicalUrl (ctx: PageContext) =
         Site.absoluteUrl ctx.Config ctx.CanonicalPath
@@ -90,7 +84,7 @@ module Layouts =
 
     let private headNode (ctx: PageContext) =
         let title' = pageTitle ctx
-        let desc = pageDescription ctx
+        let desc = ctx.Description
         let canonical = canonicalUrl ctx
         let ogImage = ogImageUrl ctx
 
@@ -169,7 +163,7 @@ module Layouts =
                     [ _href "#main-content"
                       _class "sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-black focus:text-white dark:focus:bg-white dark:focus:text-black focus:rounded" ]
                     [ encodedText "Skip to main content" ]
-                Components.siteHeader ctx.Config ctx.ActiveSection
+                Components.siteHeader ctx.Config ctx.ActivePath
                 main [ _id "main-content" ] ctx.Content
                 Components.siteFooter ctx.Config
                 // The copy buttons' only visual feedback is an icon swap; app.js announces success here instead.
@@ -180,35 +174,17 @@ module Layouts =
     let render (ctx: PageContext) =
         RenderView.AsString.htmlDocument (root ctx)
 
-    let context
-        (config: SiteConfig)
-        (canonicalPath: string)
-        (title: string option)
-        (description: string option)
-        (active: string option)
-        (jsonLd: string option)
-        (ogType: string)
-        (content: XmlNode list) =
+    // The defaults every page starts from. Views name what they change with { … with … }, where eight
+    // positional arguments, four of them string options, let a swapped pair compile unnoticed.
+    let page (config: SiteConfig) (canonicalPath: string) (title: string) (description: string) content =
         { Config = config
           CanonicalPath = canonicalPath
-          PageTitle = title
-          PageDescription = description
-          OgType = ogType
+          Title = title
+          Description = description
+          OgType = "website"
           OgImage = None
-          JsonLd = jsonLd
-          ActiveSection = active
+          JsonLd = None
+          ActivePath = None
           Content = content
           Article = None
           NoIndex = false }
-
-    let articleContext
-        (config: SiteConfig)
-        (canonicalPath: string)
-        (title: string option)
-        (description: string option)
-        (active: string option)
-        (jsonLd: string option)
-        (article: ArticleMeta)
-        (content: XmlNode list) =
-        { context config canonicalPath title description active jsonLd "article" content with
-            Article = Some article }

@@ -18,7 +18,7 @@ module Page =
         ]
 
     let home (config: SiteConfig) (content: SiteContent) =
-        let page = Content.getPage "home" content
+        let page = content.Home
         let notes = content.Notes |> List.truncate config.NotesOnHomepage
         let projects = content.Projects |> List.truncate config.ProjectsOnHomepage
         let body =
@@ -34,10 +34,11 @@ module Page =
                 ]
             ]
 
-        Layouts.context config "/" (Some page.Title) (Some page.Description) None (Some(JsonLd.website config)) "website" [ body ]
+        { Layouts.page config "/" page.Title page.Description [ body ] with
+            JsonLd = Some(JsonLd.website config page.Description) }
 
     let about (config: SiteConfig) (content: SiteContent) =
-        let page = Content.getPage "about" content
+        let page = content.About
 
         let srcset ext =
             [ 400; 600; 800 ]
@@ -57,4 +58,6 @@ module Page =
                 ]
             ]
 
-        Layouts.context config "/about" (Some page.Title) (Some page.Description) (Some "about") (Some(JsonLd.person config)) "website" [ body ]
+        { Layouts.page config "/about" page.Title page.Description [ body ] with
+            ActivePath = Some "/about"
+            JsonLd = Some(JsonLd.person config) }

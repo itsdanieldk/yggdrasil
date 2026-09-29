@@ -4,7 +4,8 @@ type SiteContent =
     { Notes: Note list
       Projects: Project list
       Fragrances: Fragrance list
-      Pages: Map<string, Page> }
+      Home: Page
+      About: Page }
 
 type ContentPaths =
     { ContentRoot: string
@@ -47,11 +48,6 @@ module Content =
                   $"tag {names} has no URL-safe characters, so it has no page of its own — rename it"
               elif List.length group > 1 then
                   $"tags {names} all slugify to \"{slug}\" — rename one so each tag has its own page" ])
-
-    let getPage (id: string) (content: SiteContent) =
-        match Map.tryFind id content.Pages with
-        | Some page -> page
-        | None -> failwith $"content/pages/{id}/index.md is missing"
 
     let notesWithTag (tag: string) (content: SiteContent) =
         content.Notes

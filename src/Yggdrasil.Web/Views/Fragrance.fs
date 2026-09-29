@@ -10,7 +10,7 @@ module Fragrance =
     let private txt = encodedText
 
     let index (config: SiteConfig) (owned: Fragrance list) (wishlist: Fragrance list) =
-        let meta = config.Page "fragrances"
+        let meta = config.Pages.Fragrances
         let body =
             Components.container [
                 div [ _class "space-y-10" ] [
@@ -32,4 +32,5 @@ module Fragrance =
                 ]
             ]
 
-        Layouts.context config "/fragrances" (Some meta.Title) (Some meta.Description) (Some "fragrances") None "website" [ body ]
+        { Layouts.page config "/fragrances" meta.Title meta.Description [ body ] with
+            ActivePath = Some "/fragrances" }

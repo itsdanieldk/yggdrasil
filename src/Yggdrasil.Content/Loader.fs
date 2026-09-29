@@ -163,11 +163,15 @@ module SiteContent =
 
         match publishedNotes, publishedProjects, fragrances, pages, layoutErrors root @ missingPages @ tagErrors with
         | Ok notes, Ok projects, Ok fragrances, Ok pages, [] ->
+            // Both are present: missingPages is empty, and every page file parsed.
+            let page id = pages |> List.find (fun (p: Page) -> p.Id = id)
+
             Ok
                 { Notes = notes
                   Projects = projects
                   Fragrances = fragrances |> List.filter (fun f -> not f.Draft)
-                  Pages = pages |> List.map (fun (p: Page) -> p.Id, p) |> Map.ofList }
+                  Home = page "home"
+                  About = page "about" }
         | notes, projects, fragrances, pages, validationErrors ->
             Error(errorsOf notes @ errorsOf projects @ errorsOf fragrances @ errorsOf pages @ validationErrors)
 

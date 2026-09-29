@@ -90,17 +90,23 @@ tests/Yggdrasil.Tests/     Expecto suite
 
 ## Making it yours
 
-Identity lives in data — pointing this at someone else needs no `.fs` edit:
+Identity lives in data:
 
-- **`site.yaml`** — name, author, tagline, URL, avatar, socials, and each index page's title and
-  description. Unknown keys are an error, so a typo fails the build.
+- **`site.yaml`** — name, author, tagline, URL, avatar, socials, and the title and description of each
+  generated index page (notes, projects, fragrances, tags). Unknown keys are an error, so a typo fails
+  the build.
 - **`content/pages/home/index.md` and `content/pages/about/index.md`** — required; the build fails
-  without them. Frontmatter carries the title, description, heading and optional emoji.
+  without them. Frontmatter carries the title, description, heading and optional emoji; the home
+  description also feeds the RSS feed, the web manifest and the site's structured data.
 - **`static/avatar*.{png,webp}` and `static/favicon/`** — paths come from `site.yaml`, so nothing
   else needs editing.
 
-Layout, components, colours and route structure are the theme, and are meant to be edited in code.
-`content/fragrances/` is a personal collection you'll want to delete.
+Layout, components, colours and route structure are the theme, and are meant to be edited in code. A
+few site-specific details live there too, and a fork will want to change them: the intro line on the
+notes, projects and fragrances pages and the fragrance wishlist's heading (`src/Yggdrasil.Web/Views/`),
+the web manifest's categories (`Feed.fs`), the page language (`Layouts.fs`, `JsonLd.fs`) and the
+avatar's 800×800 size in the structured data (`JsonLd.fs`). `content/fragrances/` is a personal
+collection you'll want to delete.
 
 ## Deploying
 

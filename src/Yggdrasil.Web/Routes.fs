@@ -131,4 +131,4 @@ module Route =
         | Sitemap -> Feed.sitemap config (sitemapEntries content)
         | NotFound -> Layouts.render (Views.NotFound.page config)
         | Robots -> Feed.robots config
-        | Webmanifest -> Feed.webmanifest config
+        | Webmanifest -> Feed.webmanifest config content.Home.Description

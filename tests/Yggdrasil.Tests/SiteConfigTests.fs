@@ -34,12 +34,10 @@ homepage:
   notes: 2
   projects: 1
 pages:
-  home: { title: Home, description: d }
   notes: { title: Notes, description: d }
   projects: { title: Projects, description: d }
   fragrances: { title: Fragrances, description: d }
   tags: { title: Tags, description: d }
-  about: { title: About, description: d }
 """
 
         test "the committed site.yaml loads" {
@@ -80,6 +78,25 @@ pages:
                     let joined = String.concat "\n" es
                     for field in [ "author"; "tagline"; "email"; "url"; "avatar" ] do
                         Expect.stringContains joined field $"names the missing {field}")
+        }
+
+        test "home and about are described by their own frontmatter, so pages holds only the index pages" {
+            // Act & Assert
+            withConfig minimal (function
+                | Ok c ->
+                    Expect.equal c.Pages.Notes.Title "Notes" "notes"
+                    Expect.equal c.Pages.Projects.Title "Projects" "projects"
+                    Expect.equal c.Pages.Fragrances.Title "Fragrances" "fragrances"
+                    Expect.equal c.Pages.Tags.Title "Tags" "tags"
+                | Error es -> failtestf "expected Ok, got: %s" (String.concat "; " es))
+        }
+
+        test "a pages key other than the four index pages is rejected" {
+            // Arrange & Act & Assert — home is what a site.yaml from before typed pages still carries.
+            for key in [ "home"; "blog" ] do
+                withConfig (minimal + $"  {key}: {{ title: T, description: d }}\n") (function
+                    | Ok _ -> failtest $"pages.{key} should not be silently ignored"
+                    | Error es -> Expect.stringContains (String.concat "\n" es) key "names the key")
         }
 
         test "a missing page key is named" {
@@ -145,9 +162,12 @@ pages:
             | Error es -> Expect.stringContains (List.head es) "not found" "says the file is missing"
         }
 
-        test "Page metadata comes back for every key the generator renders" {
+        test "the committed site.yaml describes every index page" {
             // Assert
-            for key in Site.requiredPageKeys do
-                Expect.isNotEmpty (config.Page key).Title $"{key} has a title"
+            let pages = config.Pages
+
+            for meta in [ pages.Notes; pages.Projects; pages.Fragrances; pages.Tags ] do
+                Expect.isNotEmpty meta.Title "a title"
+                Expect.isNotEmpty meta.Description $"{meta.Title} has a description"
         }
     ]

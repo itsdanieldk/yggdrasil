@@ -714,20 +714,6 @@ let tests =
                 // Assert
                 Expect.equal url "https://x.dk/notes/foo" "no missing or doubled slash"
             }
-
-            test "Page returns the configured metadata for a key" {
-                // Act
-                let meta = config.Page "notes"
-
-                // Assert
-                Expect.isNotEmpty meta.Title "notes title is configured"
-                Expect.isNotEmpty meta.Description "notes description is configured"
-            }
-
-            test "Page fails loudly on a key that isn't configured" {
-                // Act / Assert
-                Expect.throws (fun () -> config.Page "nope" |> ignore) "an unconfigured key is an error, not a silent blank"
-            }
         ]
 
         testList "loader" [
@@ -871,7 +857,7 @@ let tests =
                       "pages/about/index.md", "---\ntitle: About\ndescription: D\n---\nbody\n" ]
 
                 // Act
-                let home = (Fixtures.withContentRoot files SiteContent.load |> okOr).Pages.["home"]
+                let home = (Fixtures.withContentRoot files SiteContent.load |> okOr).Home
 
                 // Assert
                 Expect.equal home.Heading "Home" "a blank heading falls back to the title"
@@ -1149,10 +1135,10 @@ let tests =
                         Expect.stringContains joined $"content/pages/{id}/index.md" $"names the missing {id} page"
             }
 
-            test "the real content root supplies every required page" {
+            test "the real content root supplies the home and about pages" {
                 // Assert
-                for id in SiteContent.requiredPages do
-                    Expect.isTrue (Map.containsKey id content.Pages) $"{id} page is present"
+                Expect.equal content.Home.Id "home" "home page"
+                Expect.equal content.About.Id "about" "about page"
             }
         ]
 
