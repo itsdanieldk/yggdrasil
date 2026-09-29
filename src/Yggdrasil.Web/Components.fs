@@ -145,13 +145,19 @@ module Components =
         ]
 
     let postNavigation (prev: FeedEntry option) (next: FeedEntry option) =
-        match prev, next with
-        | None, None -> comment "no navigation"
-        | _ ->
-            nav [ _class "animate flex gap-4 mt-16"; attr "aria-label" "Previous and next posts" ] [
-                div [ _class "flex-1" ] [ match prev with Some p -> navCard false false "Previous" p | None -> comment "" ]
-                div [ _class "flex-1" ] [ match next with Some n -> navCard true true "Next" n | None -> comment "" ]
-            ]
+        [ if prev.IsSome || next.IsSome then
+              nav [ _class "animate flex gap-4 mt-16"; attr "aria-label" "Previous and next posts" ] [
+                  div [ _class "flex-1" ] [
+                      match prev with
+                      | Some p -> navCard false false "Previous" p
+                      | None -> ()
+                  ]
+                  div [ _class "flex-1" ] [
+                      match next with
+                      | Some n -> navCard true true "Next" n
+                      | None -> ()
+                  ]
+              ] ]
 
     let copyLinkButton =
         button [ _id "copy-link-button"; attr "aria-label" "Copy link to clipboard"; _class "group size-8 flex items-center justify-center rounded-full text-black/40 dark:text-white/40 hover:text-black dark:hover:text-white transition-colors duration-300 ease-in-out" ] [
@@ -168,7 +174,7 @@ module Components =
                 div [ _class "font-semibold text-lg" ] [ txt f.Name ]
                 match f.Note with
                 | Some note -> div [ _class "text-base" ] [ txt note ]
-                | None -> comment ""
+                | None -> ()
                 div [ _class "mt-1 text-sm text-black/40 dark:text-white/40" ] [ txt (String.concat " · " meta) ]
             ]
             arrowIcon "absolute top-1/2 right-3 -translate-y-1/2 size-6 rotate-[135deg]"
@@ -185,7 +191,7 @@ module Components =
             container [
                 div [ _class "flex flex-wrap gap-y-2 justify-between" ] [
                     siteLink { link with Underline = false } "/" [
-                        div [ _class "text-2xl"; _style "font-family: var(--font-title);" ] [ txt config.Name ]
+                        div [ _class "text-2xl font-title" ] [ txt config.Name ]
                     ]
                     nav [ _class "flex flex-wrap gap-2 text-lg font-medium" ] [
                         for i, item in List.indexed config.Nav do

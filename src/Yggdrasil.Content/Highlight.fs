@@ -4,7 +4,6 @@ open System
 open System.IO
 open System.Text
 open System.Collections.Generic
-open System.Collections.Concurrent
 
 open TextMateSharp.Themes
 open TextMateSharp.Registry
@@ -12,23 +11,11 @@ open TextMateSharp.Grammars
 open TextMateSharp.Internal.Themes.Reader
 open TextMateSharp.Internal.Grammars.Reader
 
-type FallbackEvent =
-    { SourcePath: string
-      Language: string
-      Reason: string }
+type private GrammarRegistryOptions(grammarDir: string, grammarFiles: IDictionary<string, string>, themeFile: string) =
 
-module private Themes =
-    let light = "catppuccin-frappe.json"
-    let dark = "catppuccin-frappe.json"
-
-type private GrammarRegistryOptions(grammarDir: string, grammarFiles: IDictionary<string, string>) =
-
-    let readTheme (file: string) =
-        use reader = new StreamReader(Path.Combine(grammarDir, file))
+    member _.ReadTheme() =
+        use reader = new StreamReader(Path.Combine(grammarDir, themeFile))
         ThemeReader.ReadThemeSync reader
-
-    member _.ReadThemeFile (file: string) =
-        readTheme file
 
     interface IRegistryOptions with
         member _.GetGrammar scopeName =
@@ -44,10 +31,14 @@ type private GrammarRegistryOptions(grammarDir: string, grammarFiles: IDictionar
         member _.GetTheme _scopeName =
             null
 
-        member _.GetDefaultTheme() =
-            readTheme Themes.light
+        member this.GetDefaultTheme() =
+            this.ReadTheme()
 
 module Highlight =
+
+    // One theme for both site themes: code looks the same in light and dark mode, so the colours can be
+    // emitted inline once and need no dark-mode CSS.
+    let private themeFile = "catppuccin-frappe.json"
 
     let private scopeByLang =
         Map
@@ -74,15 +65,10 @@ module Highlight =
 
     type Highlighter =
         private
-            { Registry: Registry
-              Light: Theme
-              Dark: Theme
-              DefaultFgLight: string
-              DefaultFgDark: string
-              DefaultBgLight: string
-              DefaultBgDark: string
-              Grammars: ConcurrentDictionary<string, IGrammar option>
-              Fallbacks: ConcurrentQueue<FallbackEvent> }
+            { Theme: Theme
+              DefaultFg: string
+              DefaultBg: string
+              Grammars: Map<string, IGrammar> }
 
     let private guiColor (theme: Theme) (key: string) (fallback: string) =
         let dict = theme.GetGuiColorDictionary()
@@ -92,38 +78,15 @@ module Highlight =
             fallback
 
     let create (grammarDir: string) =
-        let options = GrammarRegistryOptions(grammarDir, grammarFiles)
+        let options = GrammarRegistryOptions(grammarDir, grammarFiles, themeFile)
         let registry = Registry(options :> IRegistryOptions)
-        let light = Theme.CreateFromRawTheme(options.ReadThemeFile Themes.light, options)
-        let dark = Theme.CreateFromRawTheme(options.ReadThemeFile Themes.dark, options)
+        let theme = Theme.CreateFromRawTheme(options.ReadTheme(), options)
 
-        let grammars = ConcurrentDictionary<string, IGrammar option>()
-
-        for scope in grammarFiles.Keys do
-            let grammar = registry.LoadGrammar scope
-            grammars.[scope] <-
-                if isNull (box grammar) then
-                    None
-                else
-                    Some grammar
-
-        { Registry = registry
-          Light = light
-          Dark = dark
-          DefaultFgLight = guiColor light "editor.foreground" "#c6d0f5"
-          DefaultFgDark = guiColor dark "editor.foreground" "#c6d0f5"
-          DefaultBgLight = guiColor light "editor.background" "#303446"
-          DefaultBgDark = guiColor dark "editor.background" "#303446"
-          Grammars = grammars
-          Fallbacks = ConcurrentQueue<FallbackEvent>() }
-
-    let fallbacks (h: Highlighter) =
-        List.ofSeq h.Fallbacks
-
-    let private grammarFor (h: Highlighter) (scope: string) =
-        match h.Grammars.TryGetValue scope with
-        | true, g -> g
-        | _ -> None
+        { Theme = theme
+          DefaultFg = guiColor theme "editor.foreground" "#c6d0f5"
+          DefaultBg = guiColor theme "editor.background" "#303446"
+          // Loaded eagerly, so a registered grammar whose file is missing fails here rather than mid-build.
+          Grammars = grammarFiles.Keys |> Seq.map (fun scope -> scope, registry.LoadGrammar scope) |> Map.ofSeq }
 
     let private scopeMatches (selector: string) (scope: string) =
         scope = selector
@@ -177,66 +140,38 @@ module Highlight =
             | c -> sb.Append c |> ignore
 
     let private styleDecls (style: FontStyle) =
-        if int style <= 0 then
-            ""
+        [ if int style > 0 then
+              if style.HasFlag FontStyle.Italic then
+                  "font-style:italic"
+              if style.HasFlag FontStyle.Bold then
+                  "font-weight:bold"
+              if style.HasFlag FontStyle.Underline && style.HasFlag FontStyle.Strikethrough then
+                  "text-decoration:underline line-through"
+              elif style.HasFlag FontStyle.Underline then
+                  "text-decoration:underline"
+              elif style.HasFlag FontStyle.Strikethrough then
+                  "text-decoration:line-through" ]
+
+    let private emitToken (sb: StringBuilder) (h: Highlighter) (text: string) (fg: string option) (style: FontStyle) =
+        let decls =
+            [ match fg with
+              | Some c when not (String.Equals(c, h.DefaultFg, StringComparison.OrdinalIgnoreCase)) -> $"color:{c}"
+              | _ -> ()
+              yield! styleDecls style ]
+
+        if List.isEmpty decls then
+            escapeInto sb text
         else
-        [ if style.HasFlag FontStyle.Italic then
-            "font-style:italic"
-          if style.HasFlag FontStyle.Bold then
-            "font-weight:bold"
-          if style.HasFlag FontStyle.Underline && style.HasFlag FontStyle.Strikethrough then
-              "text-decoration:underline line-through"
-          elif style.HasFlag FontStyle.Underline then
-              "text-decoration:underline"
-          elif style.HasFlag FontStyle.Strikethrough then
-              "text-decoration:line-through" ]
-        |> String.concat ";"
-
-    let private emitToken
-        (sb: StringBuilder)
-        (h: Highlighter)
-        (text: string)
-        (lightFg: string option)
-        (darkFg: string option)
-        (style: FontStyle) =
-        let distinctColour =
-            match lightFg with
-            | Some c when not (String.Equals(c, h.DefaultFgLight, StringComparison.OrdinalIgnoreCase)) ->
-                Some c
-            | _ ->
-                None
-
-        let styles = styleDecls style
-        let hasStyle = styles <> ""
-
-        match distinctColour, hasStyle with
-        | None, false -> escapeInto sb text
-        | _ ->
-            let decls =
-                [ match distinctColour with
-                  | Some c ->
-                      yield $"color:{c}"
-                      match darkFg with
-                      | Some d -> yield $"--tm-dark:{d}"
-                      | None -> ()
-                  | None -> ()
-                  if hasStyle then yield styles ]
-                |> String.concat ";"
-
-            sb.Append("<span style=\"").Append(decls).Append "\">" |> ignore
+            sb.Append("<span style=\"").Append(String.concat ";" decls).Append "\">" |> ignore
             escapeInto sb text
             sb.Append "</span>" |> ignore
 
     let private openBlock (sb: StringBuilder) (h: Highlighter) =
         sb
             .Append("<pre class=\"tm\" style=\"background-color:")
-            .Append(h.DefaultBgLight)
-            .Append(";--tm-dark-bg:")
-            .Append(h.DefaultBgDark)
+            .Append(h.DefaultBg)
             .Append("\"><code style=\"color:")
-            .Append(h.DefaultFgLight)
-            .Append(";--tm-dark:")
-            .Append(h.DefaultFgDark)
+            .Append(h.DefaultFg)
             .Append("\">")
         |> ignore
 
@@ -253,22 +188,20 @@ module Highlight =
         let normalized = code.Replace("\r\n", "\n")
 
         let trimmed =
-            if normalized.EndsWith "\n" then normalized.[.. normalized.Length - 2] else normalized
+            if normalized.EndsWith '\n' then normalized.[.. normalized.Length - 2] else normalized
 
         let lines = trimmed.Split '\n'
         let mutable state: IStateStack = null
 
-        let styleCache = Dictionary<string, string option * string option * FontStyle>()
+        let styleCache = Dictionary<string, string option * FontStyle>()
 
-        let resolveBoth (scopes: List<string>) =
+        let resolve (scopes: List<string>) =
             let key = String.Join(">", scopes)
 
             match styleCache.TryGetValue key with
             | true, v -> v
             | _ ->
-                let lightFg, style = resolveStyle h.Light scopes
-                let darkFg, _ = resolveStyle h.Dark scopes
-                let v = lightFg, darkFg, style
+                let v = resolveStyle h.Theme scopes
                 styleCache.[key] <- v
                 v
 
@@ -286,35 +219,32 @@ module Highlight =
 
                 if startIdx < endIdx then
                     let text = line.Substring(startIdx, endIdx - startIdx)
-                    let lightFg, darkFg, style = resolveBoth token.Scopes
-                    emitToken sb h text lightFg darkFg style)
+                    let fg, style = resolve token.Scopes
+                    emitToken sb h text fg style)
 
         sb.Append "</code></pre>" |> ignore
         sb.ToString()
 
+    // An untagged fence is a deliberate plain block. A tagged one that can't be highlighted is an error, so a
+    // typo'd label fails the build instead of quietly losing its colours.
     let highlight (h: Highlighter) (sourcePath: string) (lang: string) (code: string) =
-        let langKey =
-            (if isNull lang then "" else lang).Trim().ToLowerInvariant()
+        let langKey = (if isNull lang then "" else lang).Trim().ToLowerInvariant()
 
-        let recordFallback reason =
-            if langKey <> "" then
-                h.Fallbacks.Enqueue
-                    { SourcePath = sourcePath
-                      Language = langKey
-                      Reason = reason }
-
-        match Map.tryFind langKey scopeByLang with
-        | None ->
-            recordFallback "unknown language"
-            plainBlock h code
-        | Some scope ->
-            match grammarFor h scope with
+        if langKey = "" then
+            Ok(plainBlock h code)
+        else
+            match Map.tryFind langKey scopeByLang with
             | None ->
-                recordFallback $"grammar '{scope}' failed to load"
-                plainBlock h code
-            | Some grammar ->
+                let supported = String.concat ", " supportedLanguages
+
+                Error(
+                    $"{sourcePath}: code fence language \"{langKey}\" is not supported; use one of {supported}, "
+                    + "leave the fence untagged for plain text, or add a grammar (see assets/grammars/README.md)"
+                )
+            | Some scope ->
                 try
-                    highlightWith h grammar code
+                    // TextMateSharp compiles grammar rules lazily and is not thread-safe, and the tests share one
+                    // highlighter across Expecto's parallel runner.
+                    Ok(lock h (fun () -> highlightWith h h.Grammars.[scope] code))
                 with ex ->
-                    recordFallback $"tokenize error: {ex.Message}"
-                    plainBlock h code
+                    Error $"{sourcePath}: code fence \"{langKey}\" could not be highlighted: {Util.exceptionDetail ex}"

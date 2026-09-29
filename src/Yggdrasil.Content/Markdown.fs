@@ -12,27 +12,28 @@ open Markdig.Renderers.Html
 open Markdig.Extensions.EmphasisExtras
 open Markdig.Extensions.AutoIdentifiers
 
-type private HighlightCodeBlockRenderer(highlighter: Highlight.Highlighter, path: string) =
+// Collects fence errors rather than failing, so Render can report them together with the file's other errors.
+type private HighlightCodeBlockRenderer(highlighter: Highlight.Highlighter, path: string, errors: ResizeArray<string>) =
     inherit HtmlObjectRenderer<CodeBlock>()
 
     override _.Write(renderer: HtmlRenderer, codeBlock: CodeBlock) =
         let lang =
             match codeBlock with
-            | :? FencedCodeBlock as fenced ->
-                if isNull fenced.Info then
-                    ""
-                else
-                    fenced.Info
-            | _ ->
-                ""
+            | :? FencedCodeBlock as fenced -> fenced.Info
+            | _ -> null
 
         let sb = StringBuilder()
 
         for i in 0 .. codeBlock.Lines.Count - 1 do
             sb.Append(codeBlock.Lines.Lines.[i].Slice.ToString()).Append '\n' |> ignore
 
-        let html = Highlight.highlight highlighter path lang (sb.ToString())
-        renderer.Write html |> ignore
+        let code = sb.ToString()
+
+        match Highlight.highlight highlighter path lang code with
+        | Ok html -> renderer.Write html |> ignore
+        | Error error ->
+            errors.Add error
+            renderer.Write(Highlight.plainBlock highlighter code) |> ignore
 
 module Markdown =
 
@@ -48,15 +49,18 @@ module Markdown =
         )
 
     let private headingRegex =
-        Regex "<(h[2-4]) id=\"([^\"]+)\">"
+        Regex("<(h[2-4]) id=\"([^\"]+)\">(.*?)</\\1>", RegexOptions.Singleline)
 
+    // The anchor follows the text and is hidden from assistive tech. Inside the heading with an aria-label,
+    // it made a screen reader's heading list read "Link to this section" before every heading.
     let private addHeadingAnchors (html: string) =
         headingRegex.Replace(
             html,
             fun (m: Match) ->
                 let tag = m.Groups.[1].Value
                 let id = m.Groups.[2].Value
-                $"<{tag} id=\"{id}\"><a class=\"heading-anchor\" href=\"#{id}\" aria-label=\"Link to this section\">#</a>"
+                let anchor = $"<a class=\"heading-anchor\" href=\"#{id}\" aria-hidden=\"true\" tabindex=\"-1\">#</a>"
+                $"<{tag} id=\"{id}\">{m.Groups.[3].Value}{anchor}</{tag}>"
         )
 
     let private pngSignature =
@@ -145,10 +149,7 @@ module Markdown =
                         m.Value
             )
 
-        if errors.Count = 0 then
-            Ok rewritten
-        else
-            Error(String.concat "; " errors)
+        rewritten, List.ofSeq errors
 
     type Renderer(highlighter: Highlight.Highlighter) =
 
@@ -164,6 +165,7 @@ module Markdown =
                 .Build()
 
         member _.Render(path: string, body: string) =
+            let fenceErrors = ResizeArray<string>()
             let doc = Markdig.Markdown.Parse(body, pipeline)
             use writer = new StringWriter()
             let renderer = HtmlRenderer writer
@@ -172,11 +174,13 @@ module Markdown =
             renderer.ObjectRenderers.RemoveAll(fun r -> r :? CodeBlockRenderer)
             |> ignore
 
-            renderer.ObjectRenderers.Add(HighlightCodeBlockRenderer(highlighter, path))
+            renderer.ObjectRenderers.Add(HighlightCodeBlockRenderer(highlighter, path, fenceErrors))
             renderer.Render doc
             |> ignore
             writer.Flush()
 
-            writer.ToString()
-            |> addHeadingAnchors
-            |> rewriteRelativeImages path
+            let html, imageErrors = writer.ToString() |> addHeadingAnchors |> rewriteRelativeImages path
+
+            match List.ofSeq fenceErrors @ imageErrors with
+            | [] -> Ok html
+            | errors -> Error errors

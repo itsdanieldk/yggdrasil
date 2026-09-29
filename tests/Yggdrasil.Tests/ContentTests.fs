@@ -914,6 +914,15 @@ let tests =
                 Expect.stringContains errors "title: required field is missing" "the missing title"
             }
 
+            test "a code-fence error and a missing field in one note are both reported" {
+                // Act
+                let errors = loadErrors (note "description: D\ndate: 2024-01-01\n" "```cobol\nX\n```\n")
+
+                // Assert
+                Expect.stringContains errors "code fence language \"cobol\"" "the fence"
+                Expect.stringContains errors "title: required field is missing" "the missing title"
+            }
+
             test "every missing field in a fragrance is reported, not just the first" {
                 // Act
                 let errors = loadErrors (Fixtures.requiredPageFiles @ [ "fragrances/sparse.yaml", "rating: 8\n" ])
@@ -1148,105 +1157,73 @@ let tests =
         ]
 
         testList "highlight" [
-            test "an unknown language falls back to a plain block and records the fallback" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
+            let path = "content/notes/x/index.md"
 
+            let highlight lang code =
+                match Highlight.highlight highlighter path lang code with
+                | Ok html -> html
+                | Error error -> failtestf "expected %s to highlight, got: %s" lang error
+
+            let rejection lang code =
+                match Highlight.highlight highlighter path lang code with
+                | Ok _ -> failtestf "expected %s to be rejected" lang
+                | Error error -> error
+
+            test "an unknown language is an error naming it and what is supported" {
                 // Act
-                let html = Highlight.highlight h "content/notes/x/index.md" "cobol" "SOME CODE\n"
+                let error = rejection "cobol" "SOME CODE\n"
 
                 // Assert
-                Expect.stringContains html "class=\"tm\"" "wrapper kept"
-                Expect.stringContains html "SOME CODE" "code preserved"
-                Expect.isTrue (Highlight.fallbacks h |> List.exists (fun e -> e.Language = "cobol")) "fallback recorded"
+                Expect.stringContains error path "carries the path"
+                Expect.stringContains error "\"cobol\"" "names the language"
+                Expect.stringContains error "fsharp" "lists the supported labels"
             }
 
-            test "a known language highlights and records no fallback" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
-
+            test "the shipped grammars (F#, Scala, shell) load and highlight" {
                 // Act
-                let html = Highlight.highlight h "x" "fsharp" "let x = 1\n"
-
-                // Assert
-                Expect.stringContains html "class=\"tm\"" "wrapper"
-                Expect.isEmpty (Highlight.fallbacks h) "no fallbacks for a shipped grammar"
-            }
-
-            test "the other shipped grammars (scala, shell) load and highlight" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
-
-                // Act
-                let scala = Highlight.highlight h "x" "scala" "val x = 1\n"
-                let shell = Highlight.highlight h "x" "bash" "echo hi\n"
-
-                // Assert
-                Expect.stringContains scala "class=\"tm\"" "scala wrapper"
-                Expect.stringContains shell "class=\"tm\"" "shell wrapper"
-                Expect.isEmpty (Highlight.fallbacks h) "no fallbacks for shipped grammars"
-            }
-
-            test "language aliases resolve to the same grammar" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
-
-                // Act
-                let fsharp = Highlight.highlight h "x" "fsharp" "let x = 1\n"
-                let fs = Highlight.highlight h "x" "fs" "let x = 1\n"
-                let hash = Highlight.highlight h "x" "f#" "let x = 1\n"
-                let bash = Highlight.highlight h "x" "bash" "echo hi\n"
-                let sh = Highlight.highlight h "x" "sh" "echo hi\n"
-                let shellscript = Highlight.highlight h "x" "shellscript" "echo hi\n"
+                let fsharp = highlight "fsharp" "let x = 1\n"
+                let scala = highlight "scala" "val x = 1\n"
+                let shell = highlight "bash" "echo hi\n"
 
                 // Assert
                 Expect.stringContains fsharp "<span" "fsharp produced coloured tokens"
-                Expect.stringContains bash "<span" "shell produced coloured tokens"
-                Expect.equal fs fsharp "fs resolves to the fsharp grammar"
-                Expect.equal hash fsharp "f# resolves to the fsharp grammar"
-                Expect.equal sh bash "sh resolves to the shell grammar"
-                Expect.equal shellscript bash "shellscript resolves to the shell grammar"
-                Expect.isEmpty (Highlight.fallbacks h) "no fallbacks for aliases"
+                Expect.stringContains scala "class=\"tm\"" "scala wrapper"
+                Expect.stringContains shell "<span" "shell produced coloured tokens"
             }
 
-            test "a removed language is no longer supported and falls back" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
+            test "language aliases resolve to the same grammar" {
+                // Act & Assert
+                Expect.equal (highlight "fs" "let x = 1\n") (highlight "fsharp" "let x = 1\n") "fs"
+                Expect.equal (highlight "f#" "let x = 1\n") (highlight "fsharp" "let x = 1\n") "f#"
+                Expect.equal (highlight "sh" "echo hi\n") (highlight "bash" "echo hi\n") "sh"
+                Expect.equal (highlight "shellscript" "echo hi\n") (highlight "bash" "echo hi\n") "shellscript"
+            }
 
+            test "a removed language is no longer supported" {
                 // Act
-                let html = Highlight.highlight h "x" "csharp" "var x = 1;\n"
+                let error = rejection "csharp" "var x = 1;\n"
 
                 // Assert
                 Expect.isFalse (List.contains "csharp" Highlight.supportedLanguages) "csharp is not advertised"
-                Expect.stringContains html "class=\"tm\"" "wrapper kept"
-                Expect.isTrue
-                    (Highlight.fallbacks h |> List.exists (fun e -> e.Language = "csharp"))
-                    "an unshipped language records a fallback, which fails the build"
+                Expect.stringContains error "\"csharp\"" "an unshipped language is an error, which fails the build"
             }
 
             test "a scope only another language's rule would claim keeps the default foreground" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
-
                 // Act
-                let html = Highlight.highlight h "x" "fsharp" "let add x y = x + y\n"
+                let html = highlight "fsharp" "let add x y = x + y\n"
 
                 // Assert
                 Expect.stringContains html "</span> add" "binding name is default-coloured, so no span"
                 Expect.stringContains html "font-style:italic\"> x y </span>" "parameters keep variable.parameter styling"
             }
 
-            test "an empty language fence yields a plain block and records no fallback" {
-                // Arrange
-                let h = Highlight.create contentPaths.GrammarRoot
-
+            test "an untagged fence is a plain block, not an error" {
                 // Act
-                let html = Highlight.highlight h "x" "" "plain text\n"
+                let html = highlight "" "plain text\n"
 
                 // Assert
                 Expect.stringContains html "class=\"tm\"" "wrapper kept"
                 Expect.stringContains html "plain text" "code preserved"
-                Expect.isEmpty (Highlight.fallbacks h) "an empty fence records no fallback"
             }
         ]
 
@@ -1267,44 +1244,26 @@ let tests =
                 Expect.stringContains body "<h2 id=\"effects-as-values\">" "heading id"
             }
 
-            test "headings carry a server-rendered anchor link" {
+            test "headings carry a server-rendered anchor after the text, hidden from assistive tech" {
                 // Act
                 let body = render ()
 
                 // Assert
-                Expect.stringContains
-                    body
-                    "<h2 id=\"effects-as-values\"><a class=\"heading-anchor\" href=\"#effects-as-values\""
-                    "ssr anchor"
+                let anchor =
+                    "<a class=\"heading-anchor\" href=\"#effects-as-values\" "
+                    + "aria-hidden=\"true\" tabindex=\"-1\">#</a>"
+                Expect.stringContains body $"<h2 id=\"effects-as-values\">Effects as Values{anchor}</h2>" "ssr anchor"
             }
 
-            test "code blocks carry both light and dark themes, both Frappé" {
+            test "code blocks carry the Frappé colours inline, once, for both site themes" {
                 // Act
                 let body = render ()
 
                 // Assert
-                Expect.stringContains body "background-color:#303446" "frappé inline background"
-                Expect.stringContains body "--tm-dark-bg:#303446" "dark background variable"
-                Expect.stringContains body "class=\"tm\"" "wrapper class"
-                Expect.stringContains body "<code style=\"color:#c6d0f5;--tm-dark:#c6d0f5\">" "default fg, both themes, on <code>"
-            }
-
-            test "every coloured token carries a dark counterpart" {
-                // Arrange
-                let body = render ()
-
-                // Act
-                let styles =
-                    Regex.Matches(body, "<span style=\"([^\"]*)\"")
-                    |> Seq.map (fun m -> m.Groups.[1].Value)
-                    |> List.ofSeq
-
-                let missing =
-                    styles |> List.filter (fun s -> s.Contains "color:" && not (s.Contains "--tm-dark"))
-
-                // Assert
-                Expect.isNonEmpty styles "the fixture has styled spans to check"
-                Expect.isEmpty missing "no coloured span omits its --tm-dark counterpart"
+                Expect.stringContains body "<pre class=\"tm\" style=\"background-color:#303446\">" "frappé background"
+                Expect.stringContains body "<code style=\"color:#c6d0f5\">" "default foreground on <code>"
+                Expect.stringContains body "<span style=\"color:" "coloured tokens"
+                Expect.isFalse (body.Contains "--tm-dark") "no dark-mode variables"
             }
         ]
 
@@ -1333,7 +1292,7 @@ let tests =
 
                 // Assert
                 match result with
-                | Error e -> failtestf "expected Ok, got: %s" e
+                | Error e -> failtestf "expected Ok, got: %A" e
                 | Ok html ->
                     Expect.stringContains html "src=\"/images/notes/my-note/shot.webp\"" "webp path"
                     Expect.stringContains html "width=\"16\"" "width read from the PNG header"
@@ -1350,7 +1309,7 @@ let tests =
 
                 // Assert
                 match result with
-                | Error e -> failtestf "expected Ok, got: %s" e
+                | Error e -> failtestf "expected Ok, got: %A" e
                 | Ok html ->
                     Expect.stringContains html "src=\"/images/notes/my-note/shot.webp\"" "still rewritten"
                     Expect.stringContains html "width=\"16\"" "still measured"
@@ -1367,7 +1326,7 @@ let tests =
 
                 // Assert
                 match result with
-                | Error e -> failtestf "expected Ok, got: %s" e
+                | Error e -> failtestf "expected Ok, got: %A" e
                 | Ok html ->
                     let widths = Regex.Matches(html, "\\bwidth=").Count
                     Expect.equal widths 1 "exactly one width attribute"
@@ -1381,7 +1340,7 @@ let tests =
                 // Act & Assert
                 for src in sources do
                     match renderInTemp "notes" "n" None $"![alt]({src})" with
-                    | Error e -> failtestf "expected Ok for %s, got: %s" src e
+                    | Error e -> failtestf "expected Ok for %s, got: %A" src e
                     | Ok html -> Expect.stringContains html src $"{src} is preserved"
             }
 
@@ -1395,7 +1354,7 @@ let tests =
                 // Assert
                 match result with
                 | Ok _ -> failtest "a non-PNG should not be accepted"
-                | Error e -> Expect.stringContains e "signature" "identifies the real problem"
+                | Error e -> Expect.stringContains (String.concat "\n" e) "signature" "identifies the real problem"
             }
 
             test "the collection and slug come from the file's own location" {
@@ -1404,7 +1363,7 @@ let tests =
 
                 // Assert
                 match result with
-                | Error e -> failtestf "expected Ok, got: %s" e
+                | Error e -> failtestf "expected Ok, got: %A" e
                 | Ok html -> Expect.stringContains html "/images/projects/deep-slug/a.webp" "path mirrors the source tree"
             }
 
@@ -1415,7 +1374,7 @@ let tests =
                 // Assert
                 match result with
                 | Ok _ -> failtest "a nested image should be rejected"
-                | Error e -> Expect.stringContains e "subfolder" "explains the rule"
+                | Error e -> Expect.stringContains (String.concat "\n" e) "subfolder" "explains the rule"
             }
         ]
     ]
