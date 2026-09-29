@@ -103,7 +103,13 @@ FIO's type, `FIO<'A, 'E>`, has no environment parameter. What you can swap there
 
 Traditional concurrent programming means managing threads, locks, shared state, and error handling across all of it. Even with async/await, you're still tracking `Task` lifecycles, cancellation tokens, and exceptions that surface in surprising places. Building FIO's runtimes gave me a healthy respect for this: some of the hardest debugging I've ever done was in FIO's own scheduler, where bugs rarely reproduce when you're actually looking for them.
 
-Effect systems introduce *fibers*: lightweight green threads managed by the runtime, not the OS. Creating a fiber is cheap (you can have thousands or millions), and the runtime handles scheduling across available threads. Here's how that looks in ZIO:
+Effect systems introduce *fibers*: lightweight green threads managed by the runtime, not the OS. Creating a fiber is cheap (you can have thousands or millions), and the runtime handles scheduling across available threads. In F# with FIO:
+
+```fsharp
+let processBatch = FIO.forEachPar items processItem
+```
+
+And the same in Scala with ZIO:
 
 ```scala
 val processBatch = ZIO.foreachPar(items)(processItem)

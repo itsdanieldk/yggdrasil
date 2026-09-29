@@ -130,6 +130,35 @@ pages:
                     Expect.stringContains joined "\"tagln\"" "names the second")
         }
 
+        test "an unknown key doesn't hide the file's other errors" {
+            // Act & Assert
+            withConfig "name: only-a-name\nnmae: typo\n" (function
+                | Ok _ -> failtest "expected Error"
+                | Error es ->
+                    let joined = String.concat "\n" es
+                    Expect.stringContains joined "\"nmae\"" "names the unknown key"
+                    Expect.stringContains joined "author" "and still reports the missing fields")
+        }
+
+        test "every unknown nested key is named by its path, not by a .NET type" {
+            // Arrange
+            let yaml =
+                minimal.Replace("  alt: A picture\n", "  alt: A picture\n  size: 400\n")
+                + "  blog: { title: Blog, description: d }\n"
+                + "nav:\n  - { label: notes, href: /notes, target: _blank }\n"
+
+            // Act & Assert
+            withConfig yaml (function
+                | Ok _ -> failtest "typo'd nested keys should not be silently dropped"
+                | Error es ->
+                    let joined = String.concat "\n" es
+
+                    for key in [ "avatar.size"; "pages.blog"; "nav[0].target" ] do
+                        Expect.stringContains joined $"\"{key}\"" $"names {key}"
+
+                    Expect.isFalse (joined.Contains "Yggdrasil.Content") "no .NET type names")
+        }
+
         test "an empty file is reported as empty, not as a null dereference" {
             // Arrange & Act & Assert
             withConfig "" (function
