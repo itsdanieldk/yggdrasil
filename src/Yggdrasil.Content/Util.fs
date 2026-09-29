@@ -54,6 +54,18 @@ module Util =
         | null -> ex.Message
         | inner -> ex.Message + " → " + exceptionDetail inner
 
+    // A blank value counts as missing: `title: ""` would otherwise build a page with an empty heading.
+    let required (path: string) (field: string) (value: string) =
+        if String.IsNullOrWhiteSpace value then
+            Error [ $"{path}: {field}: required field is missing" ]
+        else
+            Ok(value.Trim())
+
+    // A blank value is absent. Anything else is kept verbatim: the home heading's trailing space is what
+    // separates it from the emoji.
+    let optional (value: string) =
+        if String.IsNullOrWhiteSpace value then None else Some value
+
     let published (isDraft: 'a -> bool) (getDate: 'a -> 'k) (entries: 'a list) =
         entries
         |> List.filter (isDraft >> not)

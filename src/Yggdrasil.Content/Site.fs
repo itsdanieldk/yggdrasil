@@ -203,14 +203,32 @@ module Site =
                     if isNull dto.OgDefaultTags then [] else List.ofArray dto.OgDefaultTags
                   Pages = pages }
 
+    // Derived from the DTO, so a new site.yaml field can't be forgotten here.
+    let private topLevelKeys =
+        typeof<SiteDto>.GetProperties()
+        |> Array.map (fun p -> CamelCaseNamingConvention.Instance.Apply p.Name)
+        |> Set.ofArray
+
     let load (path: string) =
         if not (File.Exists path) then
             Error [ $"{path}: site config not found" ]
         else
-            try
-                parse (deserializer.Deserialize<SiteDto>(File.ReadAllText path))
-            with ex ->
-                Error [ $"{path}: invalid YAML: {Util.exceptionDetail ex}" ]
+            let yaml = File.ReadAllText path
+
+            // parse dereferences list items, which a syntactically valid document can still leave null.
+            let parseSafely (dto: SiteDto) =
+                try
+                    parse dto
+                with ex ->
+                    Error [ $"{path}: invalid YAML file: {Util.exceptionDetail ex}" ]
+
+            // The key check comes first because the deserializer itself rejects unknown keys, but only
+            // the first one it meets.
+            result {
+                do! Yaml.rejectUnknownKeys path topLevelKeys yaml
+                let! dto = Yaml.parse<SiteDto> deserializer path "YAML file" yaml
+                return! parseSafely dto
+            }
 
     let absoluteUrl (config: SiteConfig) (path: string) =
         config.BaseUrl.TrimEnd '/' + "/" + path.TrimStart '/'

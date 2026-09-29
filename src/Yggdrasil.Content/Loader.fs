@@ -25,31 +25,31 @@ module SiteContent =
         else
             []
 
-    let private readEntry (renderer: Markdown.Renderer) (allowed: Set<string>) (path: string) =
+    // Only the split and the YAML parse can stop a file early, because everything after them needs their
+    // output; unknown keys, field errors and body errors are then reported together.
+    let private readEntry (renderer: Markdown.Renderer) (allowed: Set<string>) decode (path: string) =
+        let id = Path.GetFileName(Path.GetDirectoryName path)
+
         result {
-            let id = Path.GetFileName(Path.GetDirectoryName path)
-            let contents = File.ReadAllText path
-            let! frontmatter, rawBody = Parser.split path contents
-            do! Parser.rejectUnknownKeys path allowed frontmatter
+            let! frontmatter, rawBody = Parser.split path (File.ReadAllText path)
             let! dto = Parser.deserialize path frontmatter
-            let! renderedBody = renderer.Render(path, rawBody)
-            return id, dto, rawBody, renderedBody
+            let renderedBody = renderer.Render(path, rawBody) |> Result.mapError List.singleton
+            let! () = Yaml.rejectUnknownKeys path allowed frontmatter
+            and! entry = decode path id dto rawBody renderedBody
+            return entry
         }
 
-    let private loadNote (renderer: Markdown.Renderer) (path: string) =
-        readEntry renderer Parser.noteKeys path
-        |> Result.bind (fun (id, dto, rawBody, renderedBody) ->
-            Parser.decodeNote path id dto rawBody renderedBody)
+    let private loadNote renderer path =
+        readEntry renderer Parser.noteKeys Parser.decodeNote path
 
-    let private loadProject (renderer: Markdown.Renderer) (path: string) =
-        readEntry renderer Parser.projectKeys path
-        |> Result.bind (fun (id, dto, rawBody, renderedBody) ->
-            Parser.decodeProject path id dto rawBody renderedBody)
+    let private loadProject renderer path =
+        readEntry renderer Parser.projectKeys Parser.decodeProject path
 
-    let private loadPage (renderer: Markdown.Renderer) (path: string) =
-        readEntry renderer Parser.pageKeys path
-        |> Result.bind (fun (id, dto, _, renderedBody) ->
-            Parser.decodePage path id dto (Markdown.staggerParagraphs renderedBody))
+    let private loadPage renderer path =
+        let decode path id dto _ renderedBody =
+            Parser.decodePage path id dto (renderedBody |> Result.map Markdown.staggerParagraphs)
+
+        readEntry renderer Parser.pageKeys decode path
 
     let private loadFragrance (path: string) =
         Fragrance.decode path (Path.GetFileNameWithoutExtension path) (File.ReadAllText path)
@@ -57,58 +57,46 @@ module SiteContent =
     let private errorsOf =
         function
         | Ok _ -> []
-        | Error errors -> errors
+        | Error(errors: string list list) -> List.concat errors
 
     let requiredPages = [ "home"; "about" ]
 
     let build (renderer: Markdown.Renderer) (paths: ContentPaths) =
-        let noteResults = entryFiles paths.ContentRoot "notes" |> List.map (loadNote renderer)
-        let projectResults = entryFiles paths.ContentRoot "projects" |> List.map (loadProject renderer)
-        let fragranceResults = fragranceFiles paths.ContentRoot |> List.map loadFragrance
-        let pageResults = entryFiles paths.ContentRoot "pages" |> List.map (loadPage renderer)
+        let pageFiles = entryFiles paths.ContentRoot "pages"
+        let notes = entryFiles paths.ContentRoot "notes" |> List.map (loadNote renderer) |> collectResults
+        let projects = entryFiles paths.ContentRoot "projects" |> List.map (loadProject renderer) |> collectResults
+        let fragrances = fragranceFiles paths.ContentRoot |> List.map loadFragrance |> collectResults
+        let pages = pageFiles |> List.map (loadPage renderer) |> collectResults
 
-        match
-            collectResults noteResults,
-            collectResults projectResults,
-            collectResults fragranceResults,
-            collectResults pageResults
-        with
-        | Ok notes, Ok projects, Ok fragrances, Ok pages ->
-            let pageMap =
-                pages
-                |> List.map (fun (p: Page) -> p.Id, p)
-                |> Map.ofList
+        let publishedNotes =
+            notes |> Result.map (Util.published (fun (n: Note) -> n.Draft) (fun n -> n.Featured, n.Date))
 
-            let publishedNotes =
-                Util.published (fun (n: Note) -> n.Draft) (fun n -> n.Featured, n.Date) notes
+        let publishedProjects =
+            projects |> Result.map (Util.published (fun (p: Project) -> p.Draft) (fun p -> p.Featured, p.Date))
 
-            let publishedProjects =
-                Util.published (fun (p: Project) -> p.Draft) (fun p -> p.Featured, p.Date) projects
+        // Checked against the files on disk rather than the parsed pages, so a missing page is reported
+        // even when another file fails to load.
+        let missingPages =
+            let present = pageFiles |> List.map (fun file -> Path.GetFileName(Path.GetDirectoryName file)) |> set
 
-            let liveFragrances =
-                fragrances
-                |> List.filter (fun f -> not f.Draft)
+            [ for id in requiredPages do
+                  if not (present.Contains id) then
+                      $"content/pages/{id}/index.md: required page is missing" ]
 
-            let validationErrors =
-                [ for id in requiredPages do
-                      if not (Map.containsKey id pageMap) then
-                          $"content/pages/{id}/index.md: required page is missing"
-                  yield!
-                      Content.tagCounts publishedNotes publishedProjects
-                      |> List.map fst
-                      |> Content.tagSlugErrors ]
+        let tagErrors =
+            match publishedNotes, publishedProjects with
+            | Ok notes, Ok projects -> Content.tagCounts notes projects |> List.map fst |> Content.tagSlugErrors
+            | _ -> []
 
-            if not (List.isEmpty validationErrors) then
-                Error validationErrors
-            else
-
+        match publishedNotes, publishedProjects, fragrances, pages, missingPages @ tagErrors with
+        | Ok notes, Ok projects, Ok fragrances, Ok pages, [] ->
             Ok
-                { Notes = publishedNotes
-                  Projects = publishedProjects
-                  Fragrances = liveFragrances
-                  Pages = pageMap }
-        | notes, projects, fragrances, pages ->
-            Error(errorsOf notes @ errorsOf projects @ errorsOf fragrances @ errorsOf pages)
+                { Notes = notes
+                  Projects = projects
+                  Fragrances = fragrances |> List.filter (fun f -> not f.Draft)
+                  Pages = pages |> List.map (fun (p: Page) -> p.Id, p) |> Map.ofList }
+        | notes, projects, fragrances, pages, validationErrors ->
+            Error(errorsOf notes @ errorsOf projects @ errorsOf fragrances @ errorsOf pages @ validationErrors)
 
     let loadWithHighlighter (paths: ContentPaths) =
         let highlighter = Highlight.create paths.GrammarRoot

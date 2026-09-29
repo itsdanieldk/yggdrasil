@@ -5,6 +5,7 @@
     <Compile Include="Domain.fs" />
     <Compile Include="DateParser.fs" />
     <Compile Include="Util.fs" />
+    <Compile Include="Yaml.fs" />
     <Compile Include="Site.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Highlight.fs" />
