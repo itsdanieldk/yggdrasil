@@ -58,12 +58,12 @@ let verifyReferences (distDir: string) =
         let decoded = Uri.UnescapeDataString bare
         let target = Path.Combine(distDir, decoded.TrimStart('/').Replace('/', Path.DirectorySeparatorChar))
 
+        // Only the shapes Vercel serves without cleanUrls: `/foo` resolving to `foo.html` would pass here
+        // and 404 in production.
         if decoded.EndsWith "/" then
             File.Exists(Path.Combine(target, "index.html"))
         else
-            File.Exists target
-            || File.Exists(target + ".html")
-            || File.Exists(Path.Combine(target, "index.html"))
+            File.Exists target || File.Exists(Path.Combine(target, "index.html"))
 
     let isExternal (reference: string) =
         reference = ""

@@ -7,7 +7,6 @@
   "git": {
     "deploymentEnabled": false
   },
-  "cleanUrls": true,
   "trailingSlash": false,
   "headers": [
     {
