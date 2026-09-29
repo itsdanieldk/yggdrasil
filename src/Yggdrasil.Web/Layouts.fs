@@ -51,15 +51,7 @@ module Layouts =
         """
       function toggleTheme(dark) {
         const css = document.createElement("style");
-        css.appendChild(
-          document.createTextNode(`* {
-              -webkit-transition: none !important;
-              -moz-transition: none !important;
-              -o-transition: none !important;
-              -ms-transition: none !important;
-              transition: none !important;
-            }`)
-        );
+        css.appendChild(document.createTextNode("* { transition: none !important; }"));
         document.head.appendChild(css);
 
         document.documentElement.classList.toggle("dark", dark);
@@ -180,6 +172,8 @@ module Layouts =
                 Components.siteHeader ctx.Config ctx.ActiveSection
                 main [ _id "main-content" ] ctx.Content
                 Components.siteFooter ctx.Config
+                // The copy buttons' only visual feedback is an icon swap; app.js announces success here instead.
+                div [ _id "status"; attr "role" "status"; _class "sr-only" ] []
             ]
         ]
 

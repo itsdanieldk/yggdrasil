@@ -50,6 +50,15 @@ function initBackToTop() {
   })
 }
 
+// Screen readers can't see the copy buttons' icon swap, so success is also announced in the layout's
+// role="status" region.
+function announce(message) {
+  const status = document.getElementById("status")
+  if (!status) return
+  status.textContent = message
+  setTimeout(() => (status.textContent = ""), 2000)
+}
+
 function initCopyLinkButton() {
   const button = document.getElementById("copy-link-button")
   const icon = document.getElementById("copy-link-icon")
@@ -62,6 +71,7 @@ function initCopyLinkButton() {
     } catch {
       return
     }
+    announce("Link copied")
     icon.classList.add("hidden")
     check.classList.remove("hidden")
     setTimeout(() => {
@@ -91,6 +101,7 @@ function initCopyCodeButtons() {
       } catch {
         return
       }
+      announce("Code copied")
       button.innerHTML = CHECK_ICON
       setTimeout(() => (button.innerHTML = COPY_ICON), 2000)
     })

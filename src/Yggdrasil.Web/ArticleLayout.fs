@@ -44,5 +44,5 @@ module ArticleLayout =
                   yield! children
               ]
               article [ _class "animate"; Components.stagger 4 ] [ rawText entry.Body ]
-              Components.postNavigation prev next
+              yield! Components.postNavigation prev next
           ] ]

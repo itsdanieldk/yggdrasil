@@ -524,6 +524,23 @@ let tests =
                 Expect.equal (matches "property=\"article:tag\" content=\"([^\"]*)\"" html) n.Tags "one meta per tag"
             }
 
+            test "every page carries a polite status region for the copy buttons' announcements" {
+                // Act
+                let html = render Home
+
+                // Assert
+                Expect.stringContains html "<div id=\"status\" role=\"status\" class=\"sr-only\"></div>" "status region"
+            }
+
+            test "an article without neighbours renders no navigation and no empty comment nodes" {
+                // Act
+                let html = render noteShow
+
+                // Assert
+                Expect.isFalse (html.Contains "Previous and next posts") "no navigation"
+                Expect.isFalse (html.Contains "<!--") "no comment nodes"
+            }
+
             test "non-article pages emit no article:* tags" {
                 // Act
                 let html = render Home

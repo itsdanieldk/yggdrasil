@@ -1244,15 +1244,15 @@ let tests =
                 Expect.stringContains body "<h2 id=\"effects-as-values\">" "heading id"
             }
 
-            test "headings carry a server-rendered anchor link" {
+            test "headings carry a server-rendered anchor after the text, hidden from assistive tech" {
                 // Act
                 let body = render ()
 
                 // Assert
-                Expect.stringContains
-                    body
-                    "<h2 id=\"effects-as-values\"><a class=\"heading-anchor\" href=\"#effects-as-values\""
-                    "ssr anchor"
+                let anchor =
+                    "<a class=\"heading-anchor\" href=\"#effects-as-values\" "
+                    + "aria-hidden=\"true\" tabindex=\"-1\">#</a>"
+                Expect.stringContains body $"<h2 id=\"effects-as-values\">Effects as Values{anchor}</h2>" "ssr anchor"
             }
 
             test "code blocks carry the Frappé colours inline, once, for both site themes" {

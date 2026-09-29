@@ -74,8 +74,9 @@ article code {
 }
 
 article pre {
-  @apply relative text-base;
-  @apply rounded-lg;
+  @apply relative text-base rounded-lg;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 article pre code {
@@ -90,12 +91,6 @@ article a {
 
 article a:hover {
   @apply text-accent decoration-accent;
-}
-
-article pre {
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
 }
 
 @keyframes reveal {
@@ -121,8 +116,7 @@ article pre {
     transform: none;
   }
 
-  html *,
-  html body * {
+  html * {
     animation-duration: 0.01ms;
     animation-iteration-count: 1;
     transition-duration: 0.01ms;

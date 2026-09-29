@@ -49,15 +49,18 @@ module Markdown =
         )
 
     let private headingRegex =
-        Regex "<(h[2-4]) id=\"([^\"]+)\">"
+        Regex("<(h[2-4]) id=\"([^\"]+)\">(.*?)</\\1>", RegexOptions.Singleline)
 
+    // The anchor follows the text and is hidden from assistive tech. Inside the heading with an aria-label,
+    // it made a screen reader's heading list read "Link to this section" before every heading.
     let private addHeadingAnchors (html: string) =
         headingRegex.Replace(
             html,
             fun (m: Match) ->
                 let tag = m.Groups.[1].Value
                 let id = m.Groups.[2].Value
-                $"<{tag} id=\"{id}\"><a class=\"heading-anchor\" href=\"#{id}\" aria-label=\"Link to this section\">#</a>"
+                let anchor = $"<a class=\"heading-anchor\" href=\"#{id}\" aria-hidden=\"true\" tabindex=\"-1\">#</a>"
+                $"<{tag} id=\"{id}\">{m.Groups.[3].Value}{anchor}</{tag}>"
         )
 
     let private pngSignature =
