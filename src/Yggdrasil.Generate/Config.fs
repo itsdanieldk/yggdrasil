@@ -4,8 +4,7 @@ open System
 open System.IO
 
 type GeneratorConfig =
-    { ProjectRoot: string
-      BaseUrl: string
+    { BaseUrl: string
       SkipAssets: bool }
 
 let private env name =
@@ -69,24 +68,8 @@ let resolveBaseUrl (configuredUrl: string) =
     | Some url -> validateBaseUrl "SITE_URL" url
     | None -> validateBaseUrl "site.yaml: url" configuredUrl
 
-let resolve (argv: string array) (configuredUrl: string) =
-    match resolveProjectRoot argv, resolveBaseUrl configuredUrl with
-    | Ok root, Ok baseUrl ->
-        Ok
-            { ProjectRoot = root
-              BaseUrl = baseUrl
-              SkipAssets = (env "SKIP_ASSETS").IsSome }
-    | root, baseUrl ->
-        let errorOf =
-            function
-            | Ok _ -> []
-            | Error e -> [ e ]
-        Error(errorOf root @ errorOf baseUrl)
-
-let distDirectory (config: GeneratorConfig) =
-    let dist = Path.GetFullPath(Path.Combine(config.ProjectRoot, "dist"))
-    let root = Path.GetFullPath config.ProjectRoot
-    if dist = root || not (dist.StartsWith(root, StringComparison.Ordinal)) then
-        Error $"refusing to use \"{dist}\" as the output directory — it is not inside \"{root}\""
-    else
-        Ok dist
+let resolve (configuredUrl: string) =
+    resolveBaseUrl configuredUrl
+    |> Result.map (fun baseUrl ->
+        { BaseUrl = baseUrl
+          SkipAssets = (env "SKIP_ASSETS").IsSome })
