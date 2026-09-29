@@ -161,6 +161,7 @@ let main argv =
 
                     if generator.SkipAssets then
                         printfn "SKIP_ASSETS set — skipping CSS/JS and OG-card build."
+                        Ok()
                     else
                         printfn "Building CSS/JS (standalone tailwind + esbuild) ..."
                         Assets.build binDir assetsDir distDir
@@ -168,8 +169,6 @@ let main argv =
                         printfn "Generating OG share cards ..."
                         let fontsDir = Path.Combine(assetsDir, "fonts")
                         OgImage.generateAll config fontsDir distDir content.Notes content.Projects
-
-                    Ok()
                 with ex ->
                     Error [ Util.exceptionDetail ex ]
 

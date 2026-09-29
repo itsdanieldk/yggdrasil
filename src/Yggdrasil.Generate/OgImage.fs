@@ -142,14 +142,45 @@ let private drawCard (config: SiteConfig) (fonts: CardFonts) (title: string) (ta
     use file = File.Create outPath
     data.SaveTo file
 
+// The card fonts are Latin subsets and Skia has no fallback font, so any other character would be drawn as
+// an empty box. Fail instead, naming the card and the characters.
+let private glyphErrors (config: SiteConfig) (fonts: CardFonts) (cards: (string * string * string list) list) =
+    use wordmarkFont = newFont fonts.Wordmark 48f
+    use titleFont = newFont fonts.SansBold 48f
+    use tagFont = newFont fonts.Sans 30f
+
+    let check (card: string) (font: SKFont) (text: string) =
+        let missing =
+            text.EnumerateRunes()
+            |> Seq.map string
+            |> Seq.filter (fun c -> not (String.IsNullOrWhiteSpace c || font.ContainsGlyphs c))
+            |> Seq.distinct
+            |> List.ofSeq
+
+        [ if not missing.IsEmpty then
+              let chars = missing |> List.map (fun c -> $"\"{c}\"") |> String.concat ", "
+              $"{card}: \"{text}\" contains {chars}, which the card font cannot draw" ]
+
+    [ yield! check Site.defaultOgImagePath wordmarkFont config.Name
+
+      for card, title, tags in cards do
+          yield! check card titleFont title
+
+          for tag in tags do
+              yield! check card tagFont tag ]
+
 let generateAll (config: SiteConfig) (fontsDir: string) (distDir: string) (notes: Note list) (projects: Project list) =
     use fonts = loadFonts fontsDir
-    let outPath (sitePath: string) = Path.Combine(distDir, sitePath.TrimStart '/')
 
-    drawCard config fonts $"{config.Author} — {config.Tagline}" config.OgDefaultTags (outPath Site.defaultOgImagePath)
+    let cards =
+        (Site.defaultOgImagePath, $"{config.Author} — {config.Tagline}", config.OgDefaultTags)
+        :: [ for n in notes -> Site.ogImagePath "notes" n.Id, n.Title, List.truncate 3 n.Tags ]
+        @ [ for p in projects -> Site.ogImagePath "projects" p.Id, p.Title, List.truncate 3 p.Tags ]
 
-    for n in notes do
-        drawCard config fonts n.Title (List.truncate 3 n.Tags) (outPath (Site.ogImagePath "notes" n.Id))
+    match glyphErrors config fonts cards with
+    | [] ->
+        for card, title, tags in cards do
+            drawCard config fonts title tags (Path.Combine(distDir, card.TrimStart '/'))
 
-    for p in projects do
-        drawCard config fonts p.Title (List.truncate 3 p.Tags) (outPath (Site.ogImagePath "projects" p.Id))
+        Ok()
+    | errors -> Error errors

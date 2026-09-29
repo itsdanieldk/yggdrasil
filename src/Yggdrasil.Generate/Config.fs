@@ -1,7 +1,5 @@
 module Yggdrasil.Generate.Config
 
-open Yggdrasil.Content
-
 open System
 open System.IO
 
@@ -19,16 +17,17 @@ let private env name =
 let validateBaseUrl (source: string) (raw: string) =
     let trimmed = raw.Trim()
 
-    let isAbsolute =
-        [ "http://"; "https://" ]
-        |> List.exists (fun scheme -> trimmed.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+    // A host is required as well as the scheme: "https://" would otherwise pass, and every canonical and
+    // feed URL would come out as "https:/notes/...".
+    let isAbsoluteHttp =
+        match Uri.TryCreate(trimmed, UriKind.Absolute) with
+        | true, uri -> (uri.Scheme = Uri.UriSchemeHttp || uri.Scheme = Uri.UriSchemeHttps) && uri.Host <> ""
+        | _ -> false
 
     if trimmed = "" then
         Error $"{source}: base URL is empty"
-    elif not isAbsolute then
+    elif not isAbsoluteHttp then
         Error $"{source}: \"{trimmed}\" must be an absolute http(s) URL (e.g. https://example.com)"
-    elif not (Util.isSafeUrl trimmed) then
-        Error $"{source}: \"{trimmed}\" is not a usable URL"
     else
         Ok(trimmed.TrimEnd '/' + "/")
 

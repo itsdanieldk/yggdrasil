@@ -22,6 +22,11 @@ module Util =
         let hyphenated = Regex.Replace(lowered, "[^a-z0-9]+", "-")
         hyphenated.Trim '-'
 
+    let private slugPattern = Regex @"^[a-z0-9]+(?:-[a-z0-9]+)*\z"
+
+    // Content folder and file names are used verbatim as URL path segments, so they must already be slugs.
+    let isValidSlug (name: string) = slugPattern.IsMatch name
+
     let readingTime (content: string) =
         let strip (text: string) (pattern: string, replacement: string, options: RegexOptions) =
             Regex.Replace(text, pattern, replacement, options)

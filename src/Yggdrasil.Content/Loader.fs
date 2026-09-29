@@ -1,27 +1,96 @@
 namespace Yggdrasil.Content
 
 open System.IO
+open System.Text.RegularExpressions
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module SiteContent =
 
-    let private entryFiles (root: string) (sub: string) =
-        let dir = Path.Combine(root, sub)
+    let requiredPages = [ "home"; "about" ]
+
+    let private collections = [ "notes"; "projects"; "pages"; "fragrances" ]
+
+    // Discovery is strict because whatever it passes over disappears from the site without an error: a
+    // misnamed index file, a .yml fragrance, a folder under a mistyped collection name.
+
+    // Dot-names (.DS_Store, editor state) are never content.
+    let private visible (paths: string array) =
+        paths
+        |> Array.filter (fun path -> not (Path.GetFileName(path).StartsWith '.'))
+        |> Array.sort
+        |> List.ofArray
+
+    let private checkSlug (path: string) (name: string) =
+        if Util.isValidSlug name then
+            Ok()
+        else
+            // iCloud names a conflict copy "name 2", which would otherwise publish as a second entry.
+            let hint = if Regex.IsMatch(name, @" \d+$") then " (an iCloud conflict copy?)" else ""
+            let rule = "names become URLs, so use lowercase letters, digits and single hyphens"
+            Error [ $"{path}: \"{name}\" is not a valid slug{hint}; {rule}" ]
+
+    // One Result per entry folder, plus an error for every stray file beside them.
+    let private entryFiles (root: string) (collection: string) =
+        let dir = Path.Combine(root, collection)
+
+        let entry (folder: string) =
+            // Matched by name rather than File.Exists: macOS finds "Index.md" case-insensitively and Linux
+            // does not, so the entry would build locally and be missing from the deployed site.
+            let hasIndex = Directory.GetFiles folder |> Array.exists (fun file -> Path.GetFileName file = "index.md")
+
+            result {
+                let! () = checkSlug folder (Path.GetFileName folder)
+                and! () = if hasIndex then Ok() else Error [ $"{folder}: no index.md" ]
+                return Path.Combine(folder, "index.md")
+            }
+
+        let stray (file: string) =
+            Error [ $"{file}: unexpected file; each entry in {collection} is a folder holding index.md" ]
+
         if Directory.Exists dir then
-            Directory.GetDirectories dir
-            |> Array.map (fun d -> Path.Combine(d, "index.md"))
-            |> Array.filter File.Exists
-            |> Array.sort
-            |> List.ofArray
+            List.map entry (visible (Directory.GetDirectories dir))
+            @ List.map stray (visible (Directory.GetFiles dir))
         else
             []
 
     let private fragranceFiles (root: string) =
         let dir = Path.Combine(root, "fragrances")
+
+        let fragrance (file: string) =
+            if Path.GetExtension file = ".yaml" then
+                checkSlug file (Path.GetFileNameWithoutExtension file) |> Result.map (fun () -> file)
+            else
+                Error [ $"{file}: unexpected file; each fragrance is a .yaml file" ]
+
+        let folder (path: string) =
+            Error [ $"{path}: unexpected folder; each fragrance is a .yaml file" ]
+
         if Directory.Exists dir then
-            Directory.GetFiles(dir, "*.yaml")
-            |> Array.sort
-            |> List.ofArray
+            List.map fragrance (visible (Directory.GetFiles dir))
+            @ List.map folder (visible (Directory.GetDirectories dir))
+        else
+            []
+
+    let private knownPage (file: string) =
+        let folder = Path.GetDirectoryName file
+        let id = Path.GetFileName folder
+
+        if List.contains id requiredPages then
+            Ok file
+        else
+            let supported = requiredPages |> List.map (fun page -> $"\"{page}\"") |> String.concat " and "
+            Error [ $"{folder}: unknown page \"{id}\"; only {supported} are supported" ]
+
+    let private layoutErrors (root: string) =
+        if Directory.Exists root then
+            [ for folder in visible (Directory.GetDirectories root) do
+                  let name = Path.GetFileName folder
+
+                  if not (List.contains name collections) then
+                      $"{folder}: unknown folder \"{name}\"; content/ holds notes, projects, pages and fragrances"
+
+              for file in visible (Directory.GetFiles root) do
+                  $"{file}: unexpected file in content/" ]
         else
             []
 
@@ -59,14 +128,14 @@ module SiteContent =
         | Ok _ -> []
         | Error(errors: string list list) -> List.concat errors
 
-    let requiredPages = [ "home"; "about" ]
-
     let build (renderer: Markdown.Renderer) (paths: ContentPaths) =
-        let pageFiles = entryFiles paths.ContentRoot "pages"
-        let notes = entryFiles paths.ContentRoot "notes" |> List.map (loadNote renderer) |> collectResults
-        let projects = entryFiles paths.ContentRoot "projects" |> List.map (loadProject renderer) |> collectResults
-        let fragrances = fragranceFiles paths.ContentRoot |> List.map loadFragrance |> collectResults
-        let pages = pageFiles |> List.map (loadPage renderer) |> collectResults
+        let root = paths.ContentRoot
+        let load loader files = files |> List.map (Result.bind loader) |> collectResults
+        let pageFiles = entryFiles root "pages" |> List.map (Result.bind knownPage)
+        let notes = entryFiles root "notes" |> load (loadNote renderer)
+        let projects = entryFiles root "projects" |> load (loadProject renderer)
+        let fragrances = fragranceFiles root |> load loadFragrance
+        let pages = pageFiles |> load (loadPage renderer)
 
         let publishedNotes =
             notes |> Result.map (Util.published (fun (n: Note) -> n.Draft) (fun n -> n.Featured, n.Date))
@@ -77,7 +146,11 @@ module SiteContent =
         // Checked against the files on disk rather than the parsed pages, so a missing page is reported
         // even when another file fails to load.
         let missingPages =
-            let present = pageFiles |> List.map (fun file -> Path.GetFileName(Path.GetDirectoryName file)) |> set
+            let present =
+                pageFiles
+                |> List.choose Result.toOption
+                |> List.map (fun file -> Path.GetFileName(Path.GetDirectoryName file))
+                |> set
 
             [ for id in requiredPages do
                   if not (present.Contains id) then
@@ -88,7 +161,7 @@ module SiteContent =
             | Ok notes, Ok projects -> Content.tagCounts notes projects |> List.map fst |> Content.tagSlugErrors
             | _ -> []
 
-        match publishedNotes, publishedProjects, fragrances, pages, missingPages @ tagErrors with
+        match publishedNotes, publishedProjects, fragrances, pages, layoutErrors root @ missingPages @ tagErrors with
         | Ok notes, Ok projects, Ok fragrances, Ok pages, [] ->
             Ok
                 { Notes = notes

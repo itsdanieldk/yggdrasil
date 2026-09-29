@@ -86,6 +86,13 @@ let tests =
                 Expect.stringContains error "javascript:alert(1)" "quotes the value"
             }
 
+            test "a URL without a usable host is rejected — https:// would produce canonicals like https:/notes" {
+                // Act & Assert
+                for input in [ "https://"; "http://"; "https://exa mple.com" ] do
+                    let error = Config.validateBaseUrl "SITE_URL" input |> expectError input
+                    Expect.stringContains error "absolute http(s) URL" $"explains why \"{input}\" is rejected"
+            }
+
             test "an empty value is rejected rather than silently becoming \"/\"" {
                 // Act
                 let error = Config.validateBaseUrl "SITE_URL" "   " |> expectError "blank"

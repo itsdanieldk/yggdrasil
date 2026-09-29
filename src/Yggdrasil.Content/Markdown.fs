@@ -121,9 +121,15 @@ module Markdown =
                         |> List.map (fun (k, v) -> $" {k}=\"{v}\"")
                         |> String.concat ""
 
+                    let local = src.StartsWith("./", StringComparison.Ordinal)
+
                     if isAbsoluteSrc src then
                         m.Value
-                    elif src.StartsWith("./", StringComparison.Ordinal) then
+                    // The .webp is named after the file alone, so ./a/x.png and ./b/x.png would share one.
+                    elif local && src.Substring(2).Contains '/' then
+                        errors.Add $"{path}: image \"{src}\": images sit beside index.md, not in a subfolder"
+                        m.Value
+                    elif local then
                         let file = src.Substring 2
 
                         match pngDimensions (Path.Combine(dir, file)) with

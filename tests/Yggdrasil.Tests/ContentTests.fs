@@ -19,6 +19,9 @@ let private errorText (result: Result<'a, string list>) =
     | Ok value -> failtestf "expected Error, got Ok %A" value
     | Error errors -> String.concat "\n" errors
 
+let private loadErrors files =
+    errorText (Fixtures.withContentRoot files SiteContent.load)
+
 [<Tests>]
 let tests =
     testList "Content" [
@@ -823,11 +826,6 @@ let tests =
         ]
 
         testList "every error at once" [
-            let loadErrors files =
-                match Fixtures.withContentRoot files SiteContent.load with
-                | Ok _ -> failtest "expected the load to fail"
-                | Error errors -> String.concat "\n" errors
-
             let note (frontmatter: string) (body: string) =
                 Fixtures.requiredPageFiles @ [ "notes/n/index.md", $"---\n{frontmatter}---\n{body}" ]
 
@@ -933,6 +931,83 @@ let tests =
                 // Assert
                 Expect.stringContains errors "title: required field is missing" "the broken note"
                 Expect.stringContains errors "content/pages/home/index.md: required page is missing" "the missing page"
+            }
+        ]
+
+        testList "content layout" [
+            let validNote = "---\ntitle: T\ndescription: D\ndate: 2024-01-01\n---\nbody\n"
+            let validFragrance = "name: N\nhouse: H\nurl: https://example.com\nrating: 8\n"
+            let withPages files = Fixtures.requiredPageFiles @ files
+
+            test "a folder name that is not a valid slug is rejected, hinting at iCloud copies" {
+                // Act
+                let errors = loadErrors (withPages [ "notes/foo 2/index.md", validNote ])
+
+                // Assert
+                Expect.stringContains errors "\"foo 2\" is not a valid slug" "names the folder"
+                Expect.stringContains errors "iCloud" "hints at the likely cause"
+            }
+
+            test "a fragrance file name that is not a valid slug is rejected" {
+                // Act
+                let errors = loadErrors (withPages [ "fragrances/Aventus.yaml", validFragrance ])
+
+                // Assert
+                Expect.stringContains errors "\"Aventus\" is not a valid slug" "names the file"
+            }
+
+            test "an entry folder without an exact-case index.md is rejected" {
+                // Act
+                let errors = loadErrors (withPages [ "notes/misnamed/Index.md", validNote ])
+
+                // Assert
+                Expect.stringContains errors "misnamed: no index.md" "names the folder"
+            }
+
+            test "a fragrance file that is not .yaml is rejected" {
+                // Act
+                let errors = loadErrors (withPages [ "fragrances/aventus.yml", validFragrance ])
+
+                // Assert
+                Expect.stringContains errors "aventus.yml" "names the file"
+            }
+
+            test "a page other than home and about is rejected" {
+                // Act
+                let page = "---\ntitle: Uses\ndescription: D\n---\nbody\n"
+                let errors = loadErrors (withPages [ "pages/uses/index.md", page ])
+
+                // Assert
+                Expect.stringContains errors "unknown page \"uses\"" "names the page"
+            }
+
+            test "a stray file beside the entry folders is rejected" {
+                // Act
+                let errors = loadErrors (withPages [ "notes/draft.md", validNote ])
+
+                // Assert
+                Expect.stringContains errors "draft.md" "names the file"
+            }
+
+            test "an unknown folder under content/ is rejected" {
+                // Act
+                let errors = loadErrors (withPages [ "note/typo/index.md", validNote ])
+
+                // Assert
+                Expect.stringContains errors "\"note\"" "names the folder"
+            }
+
+            test "hidden files and folders are ignored" {
+                // Arrange
+                let files =
+                    withPages
+                        [ ".DS_Store", "x"
+                          "notes/.DS_Store", "x"
+                          "fragrances/.DS_Store", "x"
+                          "notes/.drafts/index.md", "not content" ]
+
+                // Act & Assert
+                Expect.isOk (Fixtures.withContentRoot files SiteContent.load) "dotfiles are not content"
             }
         ]
 
@@ -1331,6 +1406,16 @@ let tests =
                 match result with
                 | Error e -> failtestf "expected Ok, got: %s" e
                 | Ok html -> Expect.stringContains html "/images/projects/deep-slug/a.webp" "path mirrors the source tree"
+            }
+
+            test "an image in a subfolder is rejected, since ./a/x.png and ./b/x.png would share one .webp" {
+                // Act
+                let result = renderInTemp "notes" "n" None "![x](./shots/x.png)"
+
+                // Assert
+                match result with
+                | Ok _ -> failtest "a nested image should be rejected"
+                | Error e -> Expect.stringContains e "subfolder" "explains the rule"
             }
         ]
     ]
