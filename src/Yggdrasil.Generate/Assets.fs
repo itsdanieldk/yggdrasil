@@ -134,7 +134,7 @@ let private run (exe: string) (args: string list) (workingDir: string) =
 
 let private ensureTailwind (binDir: string) (asset: string) =
     let name =
-        if isWindows && asset.EndsWith ".exe" then
+        if isWindows && asset.EndsWith(".exe", System.StringComparison.Ordinal) then
             asset.Substring(0, asset.Length - 4) + $"-{tailwindVersion}.exe"
         else
             $"{asset}-{tailwindVersion}"
@@ -162,7 +162,8 @@ let private ensureEsbuild (binDir: string) (pkg: string) =
             let mutable entry = tar.GetNextEntry()
 
             while not (isNull entry) do
-                if entry.Name.EndsWith "bin/esbuild" || entry.Name.EndsWith "esbuild.exe" then
+                if entry.Name.EndsWith("bin/esbuild", System.StringComparison.Ordinal)
+                   || entry.Name.EndsWith("esbuild.exe", System.StringComparison.Ordinal) then
                     entry.ExtractToFile(dest, true)
                     found <- true
                     entry <- null
@@ -201,8 +202,5 @@ let build (binDir: string) (assetsDir: string) (distDir: string) =
           "--bundle"
           "--target=es2022"
           $"--outfile={jsOut}"
-          "--external:/fonts/*"
-          "--external:/images/*"
-          "--alias:@=."
           "--minify" ]
         assetsDir

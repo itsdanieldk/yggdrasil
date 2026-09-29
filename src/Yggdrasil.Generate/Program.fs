@@ -8,18 +8,14 @@ open System.IO
 open System.Collections.Concurrent
 open System.Text.RegularExpressions
 
-let rec private copyDir (src: string) (dst: string) (skipTop: Set<string>) (isTop: bool) =
+let rec private copyDir (src: string) (dst: string) =
     Directory.CreateDirectory dst |> ignore
 
     for file in Directory.GetFiles src do
-        let name = Path.GetFileName file
-        if not (isTop && skipTop.Contains name) then
-            File.Copy(file, Path.Combine(dst, name), true)
+        File.Copy(file, Path.Combine(dst, Path.GetFileName file), true)
 
     for dir in Directory.GetDirectories src do
-        let name = Path.GetFileName dir
-        if not (isTop && skipTop.Contains name) then
-            copyDir dir (Path.Combine(dst, name)) skipTop false
+        copyDir dir (Path.Combine(dst, Path.GetFileName dir))
 
 let writeSite (config: SiteConfig) (content: SiteContent) (distDir: string) =
     let routes = Route.all content
@@ -60,18 +56,16 @@ let verifyReferences (distDir: string) =
 
         // Only the shapes Vercel serves without cleanUrls: `/foo` resolving to `foo.html` would pass here
         // and 404 in production.
-        if decoded.EndsWith "/" then
+        if decoded.EndsWith '/' then
             File.Exists(Path.Combine(target, "index.html"))
         else
             File.Exists target || File.Exists(Path.Combine(target, "index.html"))
 
     let isExternal (reference: string) =
         reference = ""
-        || reference.StartsWith "#"
-        || reference.StartsWith "http://"
-        || reference.StartsWith "https://"
-        || reference.StartsWith "mailto:"
-        || reference.StartsWith "data:"
+        || reference.StartsWith '#'
+        || [ "http://"; "https://"; "mailto:"; "data:" ]
+           |> List.exists (fun scheme -> reference.StartsWith(scheme, StringComparison.Ordinal))
         || hostProvided.Contains reference
 
     let problems = ResizeArray<string>()
@@ -162,8 +156,8 @@ let main argv =
 
             let assets =
                 try
-                    printfn "Copying static assets (excluding assets/) ..."
-                    copyDir staticRoot distDir (Set [ "assets"; "cache_manifest.json" ]) true
+                    printfn "Copying static assets ..."
+                    copyDir staticRoot distDir
 
                     if generator.SkipAssets then
                         printfn "SKIP_ASSETS set — skipping CSS/JS and OG-card build."

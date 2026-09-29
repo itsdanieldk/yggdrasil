@@ -48,22 +48,10 @@ module Content =
               elif List.length group > 1 then
                   $"tags {names} all slugify to \"{slug}\" — rename one so each tag has its own page" ])
 
-    let getNote (id: string) (content: SiteContent) =
-        content.Notes
-        |> List.tryFind (fun e -> e.Id = id)
-
-    let getProject (id: string) (content: SiteContent) =
-        content.Projects
-        |> List.tryFind (fun e -> e.Id = id)
-
     let getPage (id: string) (content: SiteContent) =
         match Map.tryFind id content.Pages with
         | Some page -> page
         | None -> failwith $"content/pages/{id}/index.md is missing"
-
-    let tagFromSlug (slug: string) (content: SiteContent) =
-        allTags content
-        |> List.tryFind (fun tag -> Util.slugifyTag tag = slug)
 
     let notesWithTag (tag: string) (content: SiteContent) =
         content.Notes
@@ -87,6 +75,4 @@ module Content =
         (content.Notes |> List.map FeedEntry.Note)
         @
         (content.Projects |> List.map FeedEntry.Project)
-        |> List.sortByDescending (function
-            | FeedEntry.Note n -> n.Date
-            | FeedEntry.Project p -> p.Date)
+        |> List.sortByDescending (fun e -> e.Date)

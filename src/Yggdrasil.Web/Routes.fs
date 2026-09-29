@@ -42,29 +42,20 @@ module Route =
     let outputPath (route: Route) =
         match route with
         | Home -> "index.html"
-        | About -> "about/index.html"
-        | NotesIndex -> "notes/index.html"
-        | NoteShow(n, _, _) -> $"notes/{n.Id}/index.html"
-        | ProjectsIndex -> "projects/index.html"
-        | ProjectShow(p, _, _) -> $"projects/{p.Id}/index.html"
-        | FragrancesIndex -> "fragrances/index.html"
-        | TagsIndex -> "tags/index.html"
-        | TagShow(tag, _, _) -> $"tags/{Util.slugifyTag tag}/index.html"
-        | Rss -> "rss.xml"
-        | SitemapIndex -> "sitemap-index.xml"
-        | Sitemap -> "sitemap-0.xml"
         | NotFound -> "404.html"
-        | Robots -> "robots.txt"
-        | Webmanifest -> "site.webmanifest"
-
-    let contentType (route: Route) =
-        match route with
-        | Rss -> "application/rss+xml"
+        | Rss
         | SitemapIndex
-        | Sitemap -> "application/xml"
-        | Robots -> "text/plain"
-        | Webmanifest -> "application/manifest+json"
-        | _ -> "text/html"
+        | Sitemap
+        | Robots
+        | Webmanifest -> (urlPath route).TrimStart '/'
+        | About
+        | NotesIndex
+        | NoteShow _
+        | ProjectsIndex
+        | ProjectShow _
+        | FragrancesIndex
+        | TagsIndex
+        | TagShow _ -> (urlPath route).TrimStart '/' + "/index.html"
 
     let isIndexable (route: Route) =
         match route with

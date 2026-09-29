@@ -6,8 +6,8 @@ open System.Text.Json.Nodes
 
 module Json =
 
-    let s (v: string)
-        = JsonValue.Create v :> JsonNode
+    let s (v: string) =
+        JsonValue.Create v :> JsonNode
 
     let i (v: int) =
         JsonValue.Create v :> JsonNode
@@ -22,10 +22,7 @@ module Json =
         JsonArray(List.toArray items) :> JsonNode
 
     let render (pairs: (string * JsonNode) list) =
-        let o = JsonObject()
-        for k, v in pairs do
-            o.[k] <- v
-        o.ToJsonString()
+        (node pairs).ToJsonString()
 
 module JsonLd =
 
@@ -34,18 +31,15 @@ module JsonLd =
     let private node = Json.node
     let private arr = Json.arr
 
+    // A function, not a value: a JsonNode can belong to only one parent, so reusing one instance
+    // across documents would throw.
+    let private context () = "@context", s "https://schema.org"
+
     let private toJson (pairs: (string * JsonNode) list) =
-        let o = JsonObject()
-        for k, v in pairs do
-            o.[k] <- v
-        o.["@context"] <- s "https://schema.org"
-        o.ToJsonString()
+        Json.render (pairs @ [ context () ])
 
     let private toJsonGraph (nodes: JsonNode list) =
-        let o = JsonObject()
-        o.["@context"] <- s "https://schema.org"
-        o.["@graph"] <- arr nodes
-        o.ToJsonString()
+        Json.render [ context (); "@graph", arr nodes ]
 
     let private authorNode (config: SiteConfig) =
         node [ "@type", s "Person"; "name", s config.Author; "url", s config.BaseUrl ]

@@ -144,12 +144,12 @@ let private drawCard (config: SiteConfig) (fonts: CardFonts) (title: string) (ta
 
 let generateAll (config: SiteConfig) (fontsDir: string) (distDir: string) (notes: Note list) (projects: Project list) =
     use fonts = loadFonts fontsDir
-    let og name = Path.Combine(distDir, "og", name)
+    let outPath (sitePath: string) = Path.Combine(distDir, sitePath.TrimStart '/')
 
-    drawCard config fonts $"{config.Author} — {config.Tagline}" config.OgDefaultTags (og "default.png")
+    drawCard config fonts $"{config.Author} — {config.Tagline}" config.OgDefaultTags (outPath Site.defaultOgImagePath)
 
     for n in notes do
-        drawCard config fonts n.Title (List.truncate 3 n.Tags) (og (Path.Combine("notes", n.Id + ".png")))
+        drawCard config fonts n.Title (List.truncate 3 n.Tags) (outPath (Site.ogImagePath "notes" n.Id))
 
     for p in projects do
-        drawCard config fonts p.Title (List.truncate 3 p.Tags) (og (Path.Combine("projects", p.Id + ".png")))
+        drawCard config fonts p.Title (List.truncate 3 p.Tags) (outPath (Site.ogImagePath "projects" p.Id))

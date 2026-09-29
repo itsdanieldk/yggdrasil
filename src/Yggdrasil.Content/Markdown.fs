@@ -1,5 +1,6 @@
 namespace Yggdrasil.Content
 
+open System
 open System.IO
 open System.Text
 open System.Text.RegularExpressions
@@ -35,11 +36,11 @@ type private HighlightCodeBlockRenderer(highlighter: Highlight.Highlighter, path
 
 module Markdown =
 
-    let private topLevelParagraphRegex = Regex(@"^<p>", RegexOptions.Multiline)
+    let private lineStartParagraphRegex = Regex(@"^<p>", RegexOptions.Multiline)
 
     let staggerParagraphs (html: string) =
         let mutable i = 0
-        topLevelParagraphRegex.Replace(
+        lineStartParagraphRegex.Replace(
             html,
             fun _ ->
                 i <- i + 1
@@ -91,10 +92,9 @@ module Markdown =
         set [ "src"; "alt"; "loading"; "decoding"; "width"; "height" ]
 
     let private isAbsoluteSrc (src: string) =
-        src.StartsWith "/"
-        || src.StartsWith "http://"
-        || src.StartsWith "https://"
-        || src.StartsWith "data:"
+        src.StartsWith '/'
+        || [ "http://"; "https://"; "data:" ]
+           |> List.exists (fun prefix -> src.StartsWith(prefix, StringComparison.Ordinal))
 
     let private rewriteRelativeImages (path: string) (html: string) =
         let errors = ResizeArray<string>()
@@ -123,7 +123,7 @@ module Markdown =
 
                     if isAbsoluteSrc src then
                         m.Value
-                    elif src.StartsWith "./" then
+                    elif src.StartsWith("./", StringComparison.Ordinal) then
                         let file = src.Substring 2
 
                         match pngDimensions (Path.Combine(dir, file)) with

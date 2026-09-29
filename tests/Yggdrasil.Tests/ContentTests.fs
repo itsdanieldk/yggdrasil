@@ -244,7 +244,9 @@ let tests =
                 let result = noteOf "title: T\ndescription: D\n"
 
                 // Assert
-                Expect.isError result "date is required"
+                match result with
+                | Error e -> Expect.stringContains e "date: required date is missing" "names the date field"
+                | Ok _ -> failtest "expected Error"
             }
 
             test "reads draft, tags, and an optional updatedDate" {
@@ -506,16 +508,6 @@ let tests =
                 Expect.equal counts (counts |> List.sortBy (fun (t, n) -> -n, t)) "ordered"
             }
 
-            test "every tag round-trips through its slug" {
-                // Act
-                let roundTripped =
-                    [ for tag in Content.allTags content -> tag, Content.tagFromSlug (Util.slugifyTag tag) content ]
-
-                // Assert
-                for tag, resolved in roundTripped do
-                    Expect.equal resolved (Some tag) tag
-            }
-
             test "owned fragrances are rated and sorted by rating desc then name" {
                 // Act
                 let owned = Content.ownedFragrances content.Fragrances
@@ -609,19 +601,6 @@ let tests =
                 Expect.isEmpty owned "no owned bottles survive the filter"
                 Expect.hasLength wishlist (List.length narrowed.Fragrances) "all survivors are wishlist"
                 Expect.equal (Content.allTags narrowed |> List.sort) (List.sort newest.Tags) "allTags agrees"
-            }
-
-            test "getNote finds an existing id and misses an unknown one" {
-                // Arrange
-                let existingId = (List.head content.Notes).Id
-
-                // Act
-                let found = Content.getNote existingId content
-                let missing = Content.getNote "no-such-note" content
-
-                // Assert
-                Expect.isSome found "found"
-                Expect.isNone missing "missing"
             }
         ]
 
@@ -904,7 +883,7 @@ let tests =
                 Expect.stringContains html "<p class=\"animate\" style=\"--i:3\">three" "third"
             }
 
-            test "paragraphs nested in lists and blockquotes are left alone" {
+            test "only line-start paragraphs are staggered: list items are not, blockquote lines are" {
                 // Arrange
                 let input = "<p>intro</p>\n<ul>\n<li><p>item</p></li>\n</ul>\n<blockquote>\n<p>quoted</p>\n</blockquote>"
 
@@ -914,7 +893,11 @@ let tests =
                 // Assert
                 Expect.stringContains html "<p class=\"animate\" style=\"--i:1\">intro" "the top-level one is staggered"
                 Expect.stringContains html "<li><p>item</p></li>" "list paragraph untouched"
-                Expect.equal (html.Split("class=\"animate\"").Length - 1) 2 "only line-initial paragraphs are stamped"
+                Expect.stringContains
+                    html
+                    "<p class=\"animate\" style=\"--i:2\">quoted"
+                    "a blockquote's line is staggered"
+                Expect.equal (html.Split("class=\"animate\"").Length - 1) 2 "only line-start paragraphs are stamped"
             }
         ]
 
@@ -1117,7 +1100,7 @@ let tests =
         ]
 
         testList "markdown" [
-            let note () = (Content.getNote "understanding-functional-effect-systems" content).Value
+            let note () = findNote "understanding-functional-effect-systems"
 
             test "headings get ids so client-side anchors can attach" {
                 // Act
@@ -1166,7 +1149,7 @@ let tests =
 
             test "relative image sources are rewritten to static paths" {
                 // Act
-                let project = (Content.getProject "fio" content).Value
+                let project = findProject "fio"
 
                 // Assert
                 Expect.isFalse (project.Body.Contains "src=\"./") "no relative src"

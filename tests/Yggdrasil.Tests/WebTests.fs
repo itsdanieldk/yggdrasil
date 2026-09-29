@@ -12,10 +12,10 @@ open System.Text.RegularExpressions
 open Expecto
 
 let private note () =
-    (Content.getNote "understanding-functional-effect-systems" content).Value
+    findNote "understanding-functional-effect-systems"
 
 let private fio () =
-    (Content.getProject "fio" content).Value
+    findProject "fio"
 
 let private matches (pattern: string) (input: string) =
     Regex.Matches(input, pattern, RegexOptions.Singleline)
@@ -120,7 +120,11 @@ let tests =
                 let html = renderNode (Components.siteHeader config (Some "about"))
 
                 // Assert
-                Expect.stringContains html "!text-accent" "active item carries the accent class"
+                Expect.isTrue
+                    (Regex.IsMatch(html, "<a href=\"/about\" class=\"[^\"]*!text-accent"))
+                    "the about link carries the accent class"
+
+                Expect.equal (Regex.Matches(html, "!text-accent").Count) 1 "no other item is highlighted"
             }
 
             test "tag_pill renders the tag text inside its link" {
@@ -403,7 +407,7 @@ let tests =
                     Expect.stringContains (Route.render config content (projectRoute p.Id)) p.Title p.Id
                 for tag in Content.allTags content do
                     let out = Route.render config content (tagRoute tag)
-                    Expect.stringContains out "<!DOCTYPE html>" (Util.slugifyTag tag)
+                    Expect.stringContains out (System.Net.WebUtility.HtmlEncode tag) (Util.slugifyTag tag)
             }
 
             test "output is directory-style so both slash forms resolve" {
@@ -416,20 +420,6 @@ let tests =
                 Expect.equal note "notes/understanding-functional-effect-systems/index.html" "note"
                 Expect.equal home "index.html" "home"
                 Expect.equal rss "rss.xml" "rss"
-            }
-
-            test "content types match the route kind" {
-                // Act
-                let rss = Route.contentType Rss
-                let sitemap = Route.contentType Sitemap
-                let robots = Route.contentType Robots
-                let home = Route.contentType Home
-
-                // Assert
-                Expect.equal rss "application/rss+xml" "rss"
-                Expect.equal sitemap "application/xml" "sitemap"
-                Expect.equal robots "text/plain" "robots"
-                Expect.equal home "text/html" "html"
             }
 
             test "Route.all enumerates a show page for every note and project" {
@@ -516,7 +506,7 @@ let tests =
 
             test "article pages emit article:* tags, one per note tag" {
                 // Arrange
-                let note = (Content.getNote "understanding-functional-effect-systems" content).Value
+                let note = findNote "understanding-functional-effect-systems"
 
                 // Act
                 let html = Route.render config content (noteRoute note.Id)
@@ -808,7 +798,7 @@ let tests =
                 let tmp = Path.Combine(Path.GetTempPath(), $"yggdrasil-verify-real-{System.Guid.NewGuid():N}")
 
                 try
-                    Program.writeSite config content tmp |> ignore
+                    Expect.isOk (Program.writeSite config content tmp) "every route renders"
 
                     // Act
                     let result = Program.verifyReferences tmp
