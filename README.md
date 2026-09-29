@@ -109,6 +109,10 @@ generator cannot run there. The `deploy` job in [`ci.yml`](.github/workflows/ci.
 `vercel deploy --prebuilt`, gated on `needs: [test, generate]` — so CI is the only path to production,
 and a commit that fails `dotnet test` cannot deploy.
 
+The upload uses `--skip-domain`, so the new deployment is not live yet. The job smoke-tests its unique
+URL and only then runs `vercel promote`; a deployment that fails the smoke test never reaches the domain,
+and production stays on the previous one.
+
 One-time setup:
 
 1. Repository secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` — the latter two from
@@ -123,8 +127,8 @@ One-time setup:
 > **Deployment Protection makes the deploy URL 302.** With it enabled, the unique `*.vercel.app`
 > deploy URL redirects unauthenticated requests to an SSO login, so the smoke test would see `302`
 > instead of `200`. The deploy job sends the `x-vercel-protection-bypass` header
-> (`VERCEL_AUTOMATION_BYPASS_SECRET`) so it can verify the live deployment without turning protection
-> off for humans.
+> (`VERCEL_AUTOMATION_BYPASS_SECRET`) so it can verify the staged deployment before it is promoted,
+> without turning protection off for humans.
 
 > **Do not hand-write `.vercel/output/config.json`.** `vercel build` translates `trailingSlash` and
 > `headers` from `vercel.json` into Build Output API routes; that format supports neither key, so
