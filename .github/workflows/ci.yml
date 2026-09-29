@@ -145,6 +145,6 @@ jobs:
           done
 
           code=$(curl -sS -o /dev/null -w '%{http_code}' "${bypass[@]}" "$url/about")
-          [ "$code" = "200" ] || fail "/about returned HTTP $code — cleanUrls did not survive"
+          [ "$code" = "200" ] || fail "/about returned HTTP $code — the directory index did not resolve"
 
           echo "ok: home and /about serve 200 with security headers intact"

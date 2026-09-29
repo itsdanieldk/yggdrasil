@@ -765,7 +765,7 @@ let tests =
                         Expect.isFalse (problems.Contains "/b.png 1x") "the resolving candidate is not reported")
             }
 
-            test "cleanUrls shapes both resolve" {
+            test "directory-index and extensioned shapes both resolve" {
                 // Arrange
                 withDist
                     [ "index.html", """<a href="/notes/one">a</a><a href="/robots.txt">b</a>"""
@@ -777,6 +777,16 @@ let tests =
 
                         // Assert
                         Expect.isTrue (Result.isOk result) "extensionless and extensioned both resolve")
+            }
+
+            test "an extensionless reference does not resolve to a flat .html file" {
+                // Arrange
+                withDist [ "index.html", """<a href="/about">a</a>"""; "about.html", "x" ] (fun root ->
+                    // Act
+                    let problems = Program.verifyReferences root |> expectProblems "flat html"
+
+                    // Assert
+                    Expect.stringContains problems "/about" "without cleanUrls Vercel 404s this, so the build must too")
             }
 
             test "external, host-provided and in-page references are skipped" {

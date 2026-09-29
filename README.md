@@ -46,8 +46,8 @@ minified CSS/JS, renders the 15 route types — notes, projects and tags expand 
 runs from any working directory.
 
 Preview it with `python3 -m http.server 8799 --directory dist`. A plain file server redirects
-`/notes/foo` → `/notes/foo/`; Vercel serves the canonical no-slash form via `vercel.json` (`cleanUrls`,
-`trailingSlash: false`). Both resolve either way.
+`/notes/foo` → `/notes/foo/`; Vercel serves the canonical no-slash form via `vercel.json`
+(`trailingSlash: false`). Both resolve either way.
 
 ## Configuration
 
@@ -126,10 +126,15 @@ One-time setup:
 > (`VERCEL_AUTOMATION_BYPASS_SECRET`) so it can verify the live deployment without turning protection
 > off for humans.
 
-> **Do not hand-write `.vercel/output/config.json`.** `vercel build` translates `cleanUrls`,
-> `trailingSlash` and `headers` from `vercel.json` into Build Output API routes; that format supports
-> none of those keys, so translating by hand silently drops the CSP and HSTS headers — which the
-> deploy job's smoke test then catches.
+> **Do not hand-write `.vercel/output/config.json`.** `vercel build` translates `trailingSlash` and
+> `headers` from `vercel.json` into Build Output API routes; that format supports neither key, so
+> translating by hand silently drops the CSP and HSTS headers — which the deploy job's smoke test then
+> catches.
+
+> **Do not turn `cleanUrls` back on.** It republishes every `…/index.html` at `…/index`, and Vercel's
+> Instant Static serving (which prebuilt static deploys now get) never maps `/` or `/about` back to
+> those paths, so every page 404s. The directory-per-page output doesn't need it: `/about` already
+> serves `about/index.html`.
 
 Roll back by promoting the previous deployment in the Vercel dashboard (an already-built artifact,
 effective immediately); revert the commit afterwards — restore the site first, fix the repo second.
