@@ -66,10 +66,9 @@ module Util =
         else
             Ok(value.Trim())
 
-    // A blank value is absent. Anything else is kept verbatim: the home heading's trailing space is what
-    // separates it from the emoji.
+    // A blank value is absent; anything else is trimmed like a required one. Spacing is the view's job.
     let optional (value: string) =
-        if String.IsNullOrWhiteSpace value then None else Some value
+        if String.IsNullOrWhiteSpace value then None else Some(value.Trim())
 
     let published (isDraft: 'a -> bool) (getDate: 'a -> 'k) (entries: 'a list) =
         entries
