@@ -31,13 +31,10 @@ let config: SiteConfig =
       ProjectsOnHomepage = 3
       OgDefaultTags = [ "fixtures" ]
       Pages =
-        Map
-            [ "home", meta "Home" "The home page."
-              "notes", meta "Notes" "The notes index."
-              "projects", meta "Projects" "The projects index."
-              "fragrances", meta "Fragrances" "The fragrance index."
-              "tags", meta "Tags" "The tags index."
-              "about", meta "About" "The about page." ] }
+        { Notes = meta "Notes" "The notes index."
+          Projects = meta "Projects" "The projects index."
+          Fragrances = meta "Fragrances" "The fragrance index."
+          Tags = meta "Tags" "The tags index." } }
 
 let note (id: string) : Note =
     { Id = id
@@ -90,7 +87,8 @@ let content: SiteContent =
     { Notes = [ note "a-note" ]
       Projects = [ project "a-project" ]
       Fragrances = [ fragrance "a-bottle" ]
-      Pages = Map [ for id in SiteContent.requiredPages -> id, page id ] }
+      Home = page "home"
+      About = page "about" }
 
 // The required pages as (relative path, contents), for a content root that should otherwise load.
 let requiredPageFiles =

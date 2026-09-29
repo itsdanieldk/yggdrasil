@@ -180,13 +180,14 @@ module Components =
             arrowIcon "absolute top-1/2 right-3 -translate-y-1/2 size-6 rotate-[135deg]"
         ]
 
-    let private navActive (active: string option) (section: string) =
-        if active = Some section then "!text-accent" else ""
+    // Matched on href, not label, so relabelling an item in site.yaml can't silently lose its highlight.
+    let private navActive (activePath: string option) (href: string) =
+        if activePath = Some href then "!text-accent" else ""
 
     let private navSep =
         span [ _class "text-black/25 dark:text-white/25" ] [ txt "/" ]
 
-    let siteHeader (config: SiteConfig) (active: string option) =
+    let siteHeader (config: SiteConfig) (activePath: string option) =
         header [] [
             container [
                 div [ _class "flex flex-wrap gap-y-2 justify-between" ] [
@@ -198,7 +199,7 @@ module Components =
                             if i > 0 then
                                 navSep
 
-                            siteLink { link with Class = navActive active item.Label } item.Href [ txt item.Label ]
+                            siteLink { link with Class = navActive activePath item.Href } item.Href [ txt item.Label ]
                     ]
                 ]
             ]

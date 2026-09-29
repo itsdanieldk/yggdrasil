@@ -10,7 +10,7 @@ module Note =
     let private txt = encodedText
 
     let index (config: SiteConfig) (byYear: (int * Note list) list) =
-        let meta = config.Page "notes"
+        let meta = config.Pages.Notes
         let body =
             Components.container [
                 div [ _class "space-y-10" ] [
@@ -30,7 +30,8 @@ module Note =
                 ]
             ]
 
-        Layouts.context config "/notes" (Some meta.Title) (Some meta.Description) (Some "notes") None "website" [ body ]
+        { Layouts.page config "/notes" meta.Title meta.Description [ body ] with
+            ActivePath = Some "/notes" }
 
     let show (config: SiteConfig) (note: Note) (prev: Note option) (next: Note option) =
         let body = ArticleLayout.articlePage (FeedEntry.Note note) (Option.map FeedEntry.Note prev) (Option.map FeedEntry.Note next) "/notes" "Back to notes" []
@@ -40,5 +41,9 @@ module Note =
               Modified = defaultArg note.UpdatedDate note.Date
               Tags = note.Tags }
 
-        { Layouts.articleContext config $"/notes/{note.Id}" (Some note.Title) (Some note.Description) (Some "notes") (Some(JsonLd.note config note)) article body with
-            OgImage = Some(Site.ogImagePath "notes" note.Id) }
+        { Layouts.page config $"/notes/{note.Id}" note.Title note.Description body with
+            OgType = "article"
+            OgImage = Some(Site.ogImagePath "notes" note.Id)
+            JsonLd = Some(JsonLd.note config note)
+            ActivePath = Some "/notes"
+            Article = Some article }

@@ -26,8 +26,6 @@ module Feed =
         date.ToString("ddd, dd MMM yyyy '00:00:00 GMT'", CultureInfo.InvariantCulture)
 
     let rss (config: SiteConfig) (content: SiteContent) =
-        let meta = config.Page "home"
-
         let items =
             Content.feedEntries content
             |> List.map (fun entry ->
@@ -45,7 +43,7 @@ module Feed =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
         + "<rss version=\"2.0\"><channel>"
         + $"<title>{escape config.Name}</title>"
-        + $"<description>{escape meta.Description}</description>"
+        + $"<description>{escape content.Home.Description}</description>"
         + $"<link>{escape config.BaseUrl}</link>"
         + items
         + "</channel></rss>"
@@ -84,7 +82,7 @@ module Feed =
         let sitemap = Site.absoluteUrl config "/sitemap-index.xml"
         $"User-agent: *\nAllow: /\n\nSitemap: {sitemap}"
 
-    let webmanifest (config: SiteConfig) =
+    let webmanifest (config: SiteConfig) (description: string) =
         let icon size =
             Json.node
                 [ "src", Json.s $"/favicon/android-chrome-{size}x{size}.png"
@@ -100,7 +98,7 @@ module Feed =
         Json.render
             [ "name", Json.s $"{config.Name} - {config.Author}"
               "short_name", Json.s config.Name
-              "description", Json.s (config.Page "home").Description
+              "description", Json.s description
               "icons", Json.arr [ icon 192; icon 512 ]
               "theme_color", Json.s "#f0efed"
               "background_color", Json.s "#f0efed"

@@ -2,7 +2,6 @@ namespace Yggdrasil.Content
 
 open System
 open System.IO
-open System.Collections.Generic
 
 open YamlDotNet.Serialization
 open YamlDotNet.Serialization.NamingConventions
@@ -20,6 +19,13 @@ type Person =
       AlumniOf: string option
       KnowsAbout: string list }
 
+// Only the generated index pages: home and about are content pages, described by their own frontmatter.
+type IndexPages =
+    { Notes: PageMeta
+      Projects: PageMeta
+      Fragrances: PageMeta
+      Tags: PageMeta }
+
 type SiteConfig =
     { BaseUrl: string
       Name: string
@@ -33,12 +39,7 @@ type SiteConfig =
       NotesOnHomepage: int
       ProjectsOnHomepage: int
       OgDefaultTags: string list
-      Pages: Map<string, PageMeta> }
-
-    member this.Page(key: string) =
-        match Map.tryFind key this.Pages with
-        | Some meta -> meta
-        | None -> failwith $"site.yaml: pages.{key} is not defined"
+      Pages: IndexPages }
 
 module Site =
 
@@ -66,6 +67,13 @@ module Site =
           Projects: Nullable<int> }
 
     [<CLIMutable>]
+    type IndexPagesDto =
+        { Notes: PageMetaDto
+          Projects: PageMetaDto
+          Fragrances: PageMetaDto
+          Tags: PageMetaDto }
+
+    [<CLIMutable>]
     type SiteDto =
         { Name: string
           Author: string
@@ -78,10 +86,7 @@ module Site =
           Socials: SocialDto[]
           OgDefaultTags: string[]
           Homepage: HomepageDto
-          Pages: Dictionary<string, PageMetaDto> }
-
-    let requiredPageKeys =
-        [ "home"; "notes"; "projects"; "fragrances"; "tags"; "about" ]
+          Pages: IndexPagesDto }
 
     let private deserializer =
         DeserializerBuilder()
@@ -161,28 +166,24 @@ module Site =
             else
                 dto.Homepage.Notes.GetValueOrDefault 3, dto.Homepage.Projects.GetValueOrDefault 3
 
-        let pages =
-            if isNull dto.Pages then
+        let pages: IndexPages =
+            let meta (key: string) (value: PageMetaDto) : PageMeta =
+                if obj.ReferenceEquals(value, null) then
+                    errors.Add $"site.yaml: pages.{key}: required page metadata is missing"
+                    { Title = ""; Description = "" }
+                else
+                    { Title = req errors $"pages.{key}.title" value.Title
+                      Description = req errors $"pages.{key}.description" value.Description }
+
+            if obj.ReferenceEquals(dto.Pages, null) then
                 errors.Add "site.yaml: pages: required section is missing"
-                Map.empty
+                let blank = { PageMeta.Title = ""; Description = "" }
+                { Notes = blank; Projects = blank; Fragrances = blank; Tags = blank }
             else
-                for key in requiredPageKeys do
-                    if not (dto.Pages.ContainsKey key) then
-                        errors.Add $"site.yaml: pages.{key}: required page metadata is missing"
-
-                for kv in dto.Pages do
-                    if obj.ReferenceEquals(kv.Value, null) then
-                        errors.Add $"site.yaml: pages.{kv.Key}: title and description are missing"
-
-                dto.Pages
-                |> Seq.filter (fun kv -> not (obj.ReferenceEquals(kv.Value, null)))
-                |> Seq.map (fun kv ->
-                    let meta: PageMeta =
-                        { Title = req errors $"pages.{kv.Key}.title" kv.Value.Title
-                          Description = req errors $"pages.{kv.Key}.description" kv.Value.Description }
-
-                    kv.Key, meta)
-                |> Map.ofSeq
+                { Notes = meta "notes" dto.Pages.Notes
+                  Projects = meta "projects" dto.Pages.Projects
+                  Fragrances = meta "fragrances" dto.Pages.Fragrances
+                  Tags = meta "tags" dto.Pages.Tags }
 
         if errors.Count > 0 then
             Error(List.ofSeq errors)

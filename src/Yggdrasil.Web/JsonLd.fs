@@ -54,12 +54,12 @@ module JsonLd =
               "width", i w
               "height", i h ]
 
-    let website (config: SiteConfig)  =
+    let website (config: SiteConfig) (description: string) =
         toJson
             [ "@type", s "WebSite"
               "name", s config.Name
               "url", s config.BaseUrl
-              "description", s (config.Page "home").Description
+              "description", s description
               "author",
               node
                   [ "@type", s "Person"

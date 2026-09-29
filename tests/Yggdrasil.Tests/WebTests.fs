@@ -120,7 +120,7 @@ let tests =
 
             test "the active nav item is highlighted" {
                 // Act
-                let html = renderNode (Components.siteHeader Fixtures.config (Some "about"))
+                let html = renderNode (Components.siteHeader Fixtures.config (Some "/about"))
 
                 // Assert
                 Expect.isTrue
@@ -183,7 +183,7 @@ let tests =
 
             test "a hostile site name stays safe in the web manifest" {
                 // Act
-                let manifest = Feed.webmanifest { Fixtures.config with Name = hostile; Author = "A\\B\"C" }
+                let manifest = Feed.webmanifest { Fixtures.config with Name = hostile; Author = "A\\B\"C" } hostile
 
                 // Assert
                 use doc = JsonDocument.Parse manifest
@@ -642,7 +642,7 @@ let tests =
 
             test "website and person JSON-LD carry their headline fields" {
                 // Act
-                use wdoc = JsonDocument.Parse(JsonLd.website Fixtures.config)
+                use wdoc = JsonDocument.Parse(JsonLd.website Fixtures.config "A description.")
                 use pdoc = JsonDocument.Parse(JsonLd.person Fixtures.config)
                 let inLanguage = wdoc.RootElement.GetProperty("inLanguage").GetString()
 

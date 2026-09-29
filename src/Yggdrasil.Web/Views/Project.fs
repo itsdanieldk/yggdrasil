@@ -10,7 +10,7 @@ module Project =
     let private txt = encodedText
 
     let index (config: SiteConfig) (projects: Project list) =
-        let meta = config.Page "projects"
+        let meta = config.Pages.Projects
 
         let body =
             Components.container [
@@ -23,7 +23,8 @@ module Project =
                 ]
             ]
 
-        Layouts.context config "/projects" (Some meta.Title) (Some meta.Description) (Some "projects") None "website" [ body ]
+        { Layouts.page config "/projects" meta.Title meta.Description [ body ] with
+            ActivePath = Some "/projects" }
 
     let show (config: SiteConfig) (project: Project) (prev: Project option) (next: Project option) =
         let links =
@@ -49,5 +50,9 @@ module Project =
               Modified = defaultArg project.UpdatedDate project.Date
               Tags = project.Tags }
 
-        { Layouts.articleContext config $"/projects/{project.Id}" (Some project.Title) (Some project.Description) (Some "projects") (Some(JsonLd.project config project)) article body with
-            OgImage = Some(Site.ogImagePath "projects" project.Id) }
+        { Layouts.page config $"/projects/{project.Id}" project.Title project.Description body with
+            OgType = "article"
+            OgImage = Some(Site.ogImagePath "projects" project.Id)
+            JsonLd = Some(JsonLd.project config project)
+            ActivePath = Some "/projects"
+            Article = Some article }

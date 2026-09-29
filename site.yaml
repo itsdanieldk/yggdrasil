@@ -1,5 +1,6 @@
-# Who this site is about. Everything here is read at build time and threaded through every
-# renderer — changing identity never means editing F#.
+# Who this site is about, read at build time and threaded through every renderer. The home and about
+# pages describe themselves in their own frontmatter under content/pages/. A little copy lives in the
+# views as part of the theme; "Making it yours" in the README lists it.
 #
 # Unknown keys are an error, so a typo fails the build rather than silently reverting a field.
 
@@ -31,7 +32,7 @@ person:
     - .NET
     - Azure
 
-# Header navigation, in order. `label` is both the link text and the active-section key.
+# Header navigation, in order. A page highlights the item whose `href` is its section.
 nav:
   - { label: notes, href: /notes }
   - { label: projects, href: /projects }
@@ -59,9 +60,6 @@ homepage:
 
 # Titles and descriptions for the generated index pages.
 pages:
-  home:
-    title: Home
-    description: Software engineer writing about functional programming, distributed systems, Elixir, and .NET. By Daniel Larsen.
   notes:
     title: Notes
     description: Notes on functional programming, software architecture, and lessons from building backend systems.
@@ -74,6 +72,3 @@ pages:
   tags:
     title: Tags
     description: Browse notes and projects by topic — functional programming, F#, .NET, distributed systems, and more.
-  about:
-    title: About
-    description: About Daniel Larsen, a software engineer from Denmark specializing in functional programming and cloud-native backend systems.

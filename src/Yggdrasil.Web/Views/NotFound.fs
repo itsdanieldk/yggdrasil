@@ -25,5 +25,5 @@ module NotFound =
                 ]
             ]
 
-        { Layouts.context config "/404" None None None None "website" [ body ] with
+        { Layouts.page config "/404" "Page Not Found" "The page you're looking for doesn't exist." [ body ] with
             NoIndex = true }
