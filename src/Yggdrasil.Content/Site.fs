@@ -88,9 +88,11 @@ module Site =
           Homepage: HomepageDto
           Pages: IndexPagesDto }
 
+    // Unknown keys are skipped here and rejected by Yaml.rejectUnknownKeysOf, which reports every one.
     let private deserializer =
         DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
             .Build()
 
     let private req (errors: ResizeArray<string>) (field: string) (value: string) =
@@ -204,12 +206,6 @@ module Site =
                     if isNull dto.OgDefaultTags then [] else List.ofArray dto.OgDefaultTags
                   Pages = pages }
 
-    // Derived from the DTO, so a new site.yaml field can't be forgotten here.
-    let private topLevelKeys =
-        typeof<SiteDto>.GetProperties()
-        |> Array.map (fun p -> CamelCaseNamingConvention.Instance.Apply p.Name)
-        |> Set.ofArray
-
     let load (path: string) =
         if not (File.Exists path) then
             Error [ $"{path}: site config not found" ]
@@ -223,12 +219,13 @@ module Site =
                 with ex ->
                     Error [ $"{path}: invalid YAML file: {Util.exceptionDetail ex}" ]
 
-            // The key check comes first because the deserializer itself rejects unknown keys, but only
-            // the first one it meets.
+            // Unknown keys are reported alongside the field errors rather than instead of them. The allowed
+            // keys come from SiteDto, so a new site.yaml field can't be forgotten in the check.
             result {
-                do! Yaml.rejectUnknownKeys path topLevelKeys yaml
                 let! dto = Yaml.parse<SiteDto> deserializer path "YAML file" yaml
-                return! parseSafely dto
+                let! () = Yaml.rejectUnknownKeysOf<SiteDto> path yaml
+                and! config = parseSafely dto
+                return config
             }
 
     let absoluteUrl (config: SiteConfig) (path: string) =
