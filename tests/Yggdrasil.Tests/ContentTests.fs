@@ -754,101 +754,95 @@ let tests =
         testList "loader" [
             test "a featured project leads the list even though it is not the newest" {
                 // Arrange
-                let content = SiteContent.load contentPaths |> okOr
+                let project id date featured =
+                    $"projects/{id}/index.md",
+                    $"---\ntitle: {id}\ndescription: D\ndate: {date}\nfeatured: {featured}\n---\nbody\n"
+
+                let files =
+                    Fixtures.requiredPageFiles
+                    @ [ project "older-featured" "2024-01-01" "true"
+                        project "newest" "2026-01-01" "false"
+                        project "middle" "2025-01-01" "false" ]
 
                 // Act
-                let ids = content.Projects |> List.map (fun p -> p.Id)
+                let loaded = Fixtures.withContentRoot files SiteContent.load |> okOr
 
                 // Assert
-                Expect.equal (List.head ids) "fio" "the featured project leads"
-
-                let rest = List.tail ids
-                let dates = rest |> List.map (fun id -> (content.Projects |> List.find (fun p -> p.Id = id)).Date)
-                Expect.equal dates (List.sortDescending dates) "the remainder stays newest first"
+                Expect.equal
+                    (loaded.Projects |> List.map (fun p -> p.Id))
+                    [ "older-featured"; "newest"; "middle" ]
+                    "the featured project leads; the rest run newest first"
             }
 
             test "aggregates a decode error from every bad file at once" {
                 // Arrange
-                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-loader-" + Guid.NewGuid().ToString("N"))
-                let noteDir name = Path.Combine(tmp, "notes", name)
-                Directory.CreateDirectory(noteDir "bad-a") |> ignore
-                Directory.CreateDirectory(noteDir "bad-b") |> ignore
-                File.WriteAllText(Path.Combine(noteDir "bad-a", "index.md"), "---\ndescription: no title here\ndate: 2024-01-01\n---\nbody")
-                File.WriteAllText(Path.Combine(noteDir "bad-b", "index.md"), "---\ntitle: T\ndescription: D\ndate: not-a-date\n---\nbody")
+                let files =
+                    Fixtures.requiredPageFiles
+                    @ [ "notes/bad-a/index.md", "---\ndescription: no title here\ndate: 2024-01-01\n---\nbody"
+                        "notes/bad-b/index.md", "---\ntitle: T\ndescription: D\ndate: not-a-date\n---\nbody" ]
 
-                try
-                    // Act
-                    let result = SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
+                // Act
+                let result = Fixtures.withContentRoot files SiteContent.load
 
-                    // Assert
-                    match result with
-                    | Ok _ -> failtest "expected the bad files to fail the load"
-                    | Error errs ->
-                        Expect.equal (List.length errs) 2 "one error per bad file"
-                        Expect.isTrue (errs |> List.exists (fun e -> e.Contains "title")) "reports the missing title"
-                        Expect.isTrue (errs |> List.exists (fun e -> e.Contains "invalid ISO date")) "reports the bad date"
-                finally
-                    Directory.Delete(tmp, true)
+                // Assert
+                match result with
+                | Ok _ -> failtest "expected the bad files to fail the load"
+                | Error errs ->
+                    Expect.equal (List.length errs) 2 "one error per bad file"
+                    Expect.isTrue (errs |> List.exists (fun e -> e.Contains "title")) "reports the missing title"
+                    Expect.isTrue (errs |> List.exists (fun e -> e.Contains "invalid ISO date")) "reports the bad date"
             }
 
             test "a misspelled frontmatter key fails the load instead of quietly doing nothing" {
                 // Arrange
-                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-keys-" + Guid.NewGuid().ToString("N"))
-                let noteDir = Path.Combine(tmp, "notes", "typo")
-                Directory.CreateDirectory noteDir |> ignore
+                let files =
+                    Fixtures.requiredPageFiles
+                    @ [ "notes/typo/index.md",
+                        "---\ntitle: T\ndescription: D\ndate: 2024-01-01\ndrafts: true\n---\nbody" ]
 
-                File.WriteAllText(
-                    Path.Combine(noteDir, "index.md"),
-                    "---\ntitle: T\ndescription: D\ndate: 2024-01-01\ndrafts: true\n---\nbody")
+                // Act
+                let result = Fixtures.withContentRoot files SiteContent.load
 
-                try
-                    // Act
-                    let result = SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
-
-                    // Assert
-                    match result with
-                    | Ok _ -> failtest "expected the typo to fail the load"
-                    | Error errs -> Expect.isTrue (errs |> List.exists (fun e -> e.Contains "\"drafts\"")) "names the key"
-                finally
-                    Directory.Delete(tmp, true)
+                // Assert
+                match result with
+                | Ok _ -> failtest "expected the typo to fail the load"
+                | Error errs -> Expect.isTrue (errs |> List.exists (fun e -> e.Contains "\"drafts\"")) "names the key"
             }
 
             test "a note referencing a missing image fails the load (aggregated, not a crash)" {
                 // Arrange
-                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-img-" + Guid.NewGuid().ToString("N"))
-                let noteDir = Path.Combine(tmp, "notes", "with-image")
-                Directory.CreateDirectory noteDir |> ignore
-                File.WriteAllText(Path.Combine(noteDir, "index.md"), "---\ntitle: T\ndescription: D\ndate: 2024-01-01\n---\n![x](./missing.png)\n")
+                let files =
+                    Fixtures.requiredPageFiles
+                    @ [ "notes/with-image/index.md",
+                        "---\ntitle: T\ndescription: D\ndate: 2024-01-01\n---\n![x](./missing.png)\n" ]
 
-                try
-                    // Act
-                    let result = SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
+                // Act
+                let result = Fixtures.withContentRoot files SiteContent.load
 
-                    // Assert
-                    match result with
-                    | Ok _ -> failtest "expected the missing image to fail the load"
-                    | Error errs -> Expect.isTrue (errs |> List.exists (fun e -> e.Contains "missing.png")) "names the image"
-                finally
-                    Directory.Delete(tmp, true)
+                // Assert
+                match result with
+                | Ok _ -> failtest "expected the missing image to fail the load"
+                | Error errs ->
+                    Expect.isTrue (errs |> List.exists (fun e -> e.Contains "missing.png")) "names the image"
             }
 
             test "a relative image without ./ fails the load with a clear message" {
                 // Arrange
-                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-img-" + Guid.NewGuid().ToString("N"))
-                let noteDir = Path.Combine(tmp, "notes", "bad-image")
-                Directory.CreateDirectory noteDir |> ignore
-                File.WriteAllText(Path.Combine(noteDir, "index.md"), "---\ntitle: T\ndescription: D\ndate: 2024-01-01\n---\n![x](x.png)\n")
+                let files =
+                    Fixtures.requiredPageFiles
+                    @ [ "notes/bad-image/index.md",
+                        "---\ntitle: T\ndescription: D\ndate: 2024-01-01\n---\n![x](x.png)\n" ]
 
-                try
-                    // Act
-                    let result = SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
+                // Act
+                let result = Fixtures.withContentRoot files SiteContent.load
 
-                    // Assert
-                    match result with
-                    | Ok _ -> failtest "expected the bad image reference to fail"
-                    | Error errs -> Expect.isTrue (errs |> List.exists (fun e -> e.Contains "must start with")) "explains the convention"
-                finally
-                    Directory.Delete(tmp, true)
+                // Assert
+                match result with
+                | Ok _ -> failtest "expected the bad image reference to fail"
+                | Error errs ->
+                    Expect.isTrue
+                        (errs |> List.exists (fun e -> e.Contains "must start with"))
+                        "explains the convention"
             }
         ]
 
@@ -968,25 +962,17 @@ let tests =
 
         testList "pages" [
             test "a missing required page is a load error, not a crash mid-render" {
-                // Arrange
-                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-empty-" + Guid.NewGuid().ToString("N"))
-                Directory.CreateDirectory tmp |> ignore
+                // Act
+                let result = Fixtures.withContentRoot [] SiteContent.load
 
-                try
-                    // Act
-                    let result =
-                        SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
+                // Assert
+                match result with
+                | Ok _ -> failtest "expected Error for a content root with no pages"
+                | Error errors ->
+                    let joined = String.concat "\n" errors
 
-                    // Assert
-                    match result with
-                    | Ok _ -> failtest "expected Error for a content root with no pages"
-                    | Error errors ->
-                        let joined = String.concat "\n" errors
-
-                        for id in SiteContent.requiredPages do
-                            Expect.stringContains joined $"content/pages/{id}/index.md" $"names the missing {id} page"
-                finally
-                    Directory.Delete(tmp, true)
+                    for id in SiteContent.requiredPages do
+                        Expect.stringContains joined $"content/pages/{id}/index.md" $"names the missing {id} page"
             }
 
             test "the real content root supplies every required page" {
@@ -1100,11 +1086,17 @@ let tests =
         ]
 
         testList "markdown" [
-            let note () = findNote "understanding-functional-effect-systems"
+            // Keywords, a string and a comment, so several scopes get coloured.
+            let sample =
+                "## Effects as Values\n\nProse.\n\n"
+                + "```fsharp\n// greet someone\nlet greet name = $\"Hello, {name}\"\n```\n"
+
+            let renderer = Markdown.Renderer highlighter
+            let render () = renderer.Render("content/notes/sample/index.md", sample) |> okOr
 
             test "headings get ids so client-side anchors can attach" {
                 // Act
-                let body = (note ()).Body
+                let body = render ()
 
                 // Assert
                 Expect.stringContains body "<h2 id=\"effects-as-values\">" "heading id"
@@ -1112,15 +1104,18 @@ let tests =
 
             test "headings carry a server-rendered anchor link" {
                 // Act
-                let body = (note ()).Body
+                let body = render ()
 
                 // Assert
-                Expect.stringContains body "<h2 id=\"effects-as-values\"><a class=\"heading-anchor\" href=\"#effects-as-values\"" "ssr anchor"
+                Expect.stringContains
+                    body
+                    "<h2 id=\"effects-as-values\"><a class=\"heading-anchor\" href=\"#effects-as-values\""
+                    "ssr anchor"
             }
 
             test "code blocks carry both light and dark themes, both Frappé" {
                 // Act
-                let body = (note ()).Body
+                let body = render ()
 
                 // Assert
                 Expect.stringContains body "background-color:#303446" "frappé inline background"
@@ -1131,7 +1126,7 @@ let tests =
 
             test "every coloured token carries a dark counterpart" {
                 // Arrange
-                let body = (note ()).Body
+                let body = render ()
 
                 // Act
                 let styles =
@@ -1145,15 +1140,6 @@ let tests =
                 // Assert
                 Expect.isNonEmpty styles "the fixture has styled spans to check"
                 Expect.isEmpty missing "no coloured span omits its --tm-dark counterpart"
-            }
-
-            test "relative image sources are rewritten to static paths" {
-                // Act
-                let project = findProject "fio"
-
-                // Assert
-                Expect.isFalse (project.Body.Contains "src=\"./") "no relative src"
-                Expect.stringContains project.Body "src=\"/images/projects/fio/fio.webp\"" "static webp"
             }
         ]
 

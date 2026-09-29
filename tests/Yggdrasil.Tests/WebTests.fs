@@ -11,11 +11,14 @@ open System.Text.RegularExpressions
 
 open Expecto
 
-let private note () =
-    findNote "understanding-functional-effect-systems"
+let private note () = Fixtures.note "a-note"
 
-let private fio () =
-    findProject "fio"
+let private project () = Fixtures.project "a-project"
+
+let private noteShow = NoteShow(note (), None, None)
+
+let private render (route: Route) =
+    Route.render Fixtures.config Fixtures.content route
 
 let private matches (pattern: string) (input: string) =
     Regex.Matches(input, pattern, RegexOptions.Singleline)
@@ -60,7 +63,7 @@ let tests =
 
             test "arrow_card for a project shows its link but no reading time" {
                 // Arrange
-                let p = fio ()
+                let p = project ()
 
                 // Act
                 let html = renderNode (Components.arrowCard (FeedEntry.Project p))
@@ -72,7 +75,7 @@ let tests =
 
             test "fragrance_card renders the name, meta line and responsive image" {
                 // Arrange
-                let f = List.head (Content.ownedFragrances content.Fragrances)
+                let f = Fixtures.fragrance "a-bottle"
 
                 // Act
                 let html = renderNode (Components.fragranceCard f)
@@ -90,7 +93,7 @@ let tests =
                 let socials = [ { Name = "github"; Href = "https://example.com/gh" } ]
 
                 // Act
-                let html = renderNode (Components.socialLinks { config with Socials = socials } 0)
+                let html = renderNode (Components.socialLinks { Fixtures.config with Socials = socials } 0)
 
                 // Assert
                 Expect.stringContains html "github" "name"
@@ -105,7 +108,7 @@ let tests =
                       { Label = "work"; Href = "/work" } ]
 
                 // Act
-                let html = renderNode (Components.siteHeader { config with Nav = nav } None)
+                let html = renderNode (Components.siteHeader { Fixtures.config with Nav = nav } None)
 
                 // Assert
                 Expect.stringContains html "href=\"/writing\"" "first item"
@@ -117,7 +120,7 @@ let tests =
 
             test "the active nav item is highlighted" {
                 // Act
-                let html = renderNode (Components.siteHeader config (Some "about"))
+                let html = renderNode (Components.siteHeader Fixtures.config (Some "about"))
 
                 // Assert
                 Expect.isTrue
@@ -154,7 +157,7 @@ let tests =
                 let n = { note () with Title = hostile }
 
                 // Act
-                let json = JsonLd.note config n
+                let json = JsonLd.note Fixtures.config n
 
                 // Assert
                 Expect.isFalse (json.Contains "</script>") "no literal closing tag survives"
@@ -171,7 +174,7 @@ let tests =
 
             test "a hostile project title cannot escape either" {
                 // Act
-                let json = JsonLd.project config { fio () with Title = hostile }
+                let json = JsonLd.project Fixtures.config { project () with Title = hostile }
 
                 // Assert
                 Expect.isFalse (json.Contains "</script>") "no literal closing tag"
@@ -180,7 +183,7 @@ let tests =
 
             test "a hostile site name stays safe in the web manifest" {
                 // Act
-                let manifest = Feed.webmanifest { config with Name = hostile; Author = "A\\B\"C" }
+                let manifest = Feed.webmanifest { Fixtures.config with Name = hostile; Author = "A\\B\"C" }
 
                 // Assert
                 use doc = JsonDocument.Parse manifest
@@ -193,12 +196,12 @@ let tests =
                 let n = { note () with Title = "Bad\u0000ness\b & <tags>"; Description = "d\u000B" }
 
                 let feed =
-                    { content with
+                    { Fixtures.content with
                         Notes = [ n ]
                         Projects = [] }
 
                 // Act
-                let rss = Feed.rss config feed
+                let rss = Feed.rss Fixtures.config feed
 
                 // Assert
                 let parsed = System.Xml.Linq.XDocument.Parse rss
@@ -209,7 +212,7 @@ let tests =
 
             test "the sitemap escapes URLs rather than interpolating them raw" {
                 // Act
-                let xml = Feed.sitemap config [ "/notes/a&b", None; "/plain", Some "2024-01-02" ]
+                let xml = Feed.sitemap Fixtures.config [ "/notes/a&b", None; "/plain", Some "2024-01-02" ]
 
                 // Assert
                 System.Xml.Linq.XDocument.Parse xml |> ignore
@@ -245,58 +248,60 @@ let tests =
         testList "feeds" [
             test "rss lists every note and project, newest first" {
                 // Act
-                let body = Feed.rss config content
+                let body = Feed.rss Fixtures.config Fixtures.content
                 let titles = matches "<item><title>(.*?)</title>" body
+                let entries = Content.feedEntries Fixtures.content
 
                 // Assert
                 Expect.stringContains body "<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\">" "prologue"
-                Expect.stringContains body "<title>itsdaniel</title>" "channel title"
-                Expect.equal titles.Length (Content.feedEntries content).Length "one item per feed entry"
-                Expect.equal (List.head titles) (List.head (Content.feedEntries content)).Title "newest first"
+                Expect.stringContains body "<title>example</title>" "channel title"
+                Expect.equal titles.Length entries.Length "one item per feed entry"
+                Expect.equal (List.head titles) (List.head entries).Title "newest first"
             }
 
             test "rss channel link keeps its trailing slash; item links do not" {
                 // Act
-                let body = Feed.rss config content
+                let body = Feed.rss Fixtures.config Fixtures.content
 
                 // Assert
-                Expect.stringContains body "<link>https://itsdaniel.dk/</link>" "channel link (trailing slash)"
-                Expect.stringContains body "<link>https://itsdaniel.dk/notes/understanding-functional-effect-systems</link>" "item link (no slash)"
+                Expect.stringContains body "<link>https://example.com/</link>" "channel link (trailing slash)"
+                Expect.stringContains body "<link>https://example.com/notes/a-note</link>" "item link (no slash)"
             }
 
             test "rss dates are RFC 822" {
                 // Act
-                let body = Feed.rss config content
+                let body = Feed.rss Fixtures.config Fixtures.content
 
                 // Assert
-                Expect.stringContains body "<pubDate>Wed, 22 Apr 2026 00:00:00 GMT</pubDate>" "pubDate"
+                Expect.stringContains body "<pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>" "pubDate"
             }
 
             test "sitemap index points at the sitemap" {
                 // Act
-                let xml = Feed.sitemapIndex config
+                let xml = Feed.sitemapIndex Fixtures.config
 
                 // Assert
-                Expect.stringContains xml "<loc>https://itsdaniel.dk/sitemap-0.xml</loc>" "loc"
+                Expect.stringContains xml "<loc>https://example.com/sitemap-0.xml</loc>" "loc"
             }
 
             test "sitemap lists static, content and tag urls, sorted" {
                 // Act
-                let locs = matches "<loc>(.*?)</loc>" (Feed.sitemap config (Route.sitemapEntries content))
+                let xml = Feed.sitemap Fixtures.config (Route.sitemapEntries Fixtures.content)
+                let locs = matches "<loc>(.*?)</loc>" xml
 
                 // Assert
-                Expect.contains locs "https://itsdaniel.dk/" "home"
-                Expect.contains locs "https://itsdaniel.dk/notes/understanding-functional-effect-systems" "note"
-                Expect.contains locs "https://itsdaniel.dk/tags/fsharp" "tag"
+                Expect.contains locs "https://example.com/" "home"
+                Expect.contains locs "https://example.com/notes/a-note" "note"
+                Expect.contains locs "https://example.com/tags/fsharp" "tag"
                 Expect.equal locs (List.sort locs) "sorted"
             }
 
             test "robots.txt allows everything and links the sitemap" {
                 // Arrange
-                let expected = "User-agent: *\nAllow: /\n\nSitemap: https://itsdaniel.dk/sitemap-index.xml"
+                let expected = "User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap-index.xml"
 
                 // Act
-                let robots = Feed.robots config
+                let robots = Feed.robots Fixtures.config
 
                 // Assert
                 Expect.equal robots expected "robots"
@@ -304,29 +309,22 @@ let tests =
 
             test "sitemap carries lastmod for content pages but not static ones" {
                 // Act
-                let xml = Feed.sitemap config (Route.sitemapEntries content)
+                let xml = Feed.sitemap Fixtures.config (Route.sitemapEntries Fixtures.content)
 
                 // Assert
-                Expect.stringContains xml "<loc>https://itsdaniel.dk/notes/understanding-functional-effect-systems</loc><lastmod>" "note has lastmod"
-                Expect.stringContains xml "<url><loc>https://itsdaniel.dk/</loc></url>" "home has no lastmod"
+                Expect.stringContains xml "<loc>https://example.com/notes/a-note</loc><lastmod>" "note has lastmod"
+                Expect.stringContains xml "<url><loc>https://example.com/</loc></url>" "home has no lastmod"
             }
 
             test "rss escapes special characters in titles and descriptions" {
                 // Arrange
-                let escNote: Note =
-                    { Id = "esc"
-                      Title = "A & B <c>"
-                      Description = "d \"q\" '"
-                      Date = System.DateOnly(2020, 1, 1)
-                      UpdatedDate = None
-                      Body = ""
-                      ReadingTime = "1 min read"
-                      Tags = []
-                      Draft = false
-                      Featured = false }
+                let escNote =
+                    { Fixtures.note "esc" with
+                        Title = "A & B <c>"
+                        Description = "d \"q\" '" }
 
                 // Act
-                let rss = Feed.rss config { content with Notes = [ escNote ]; Projects = [] }
+                let rss = Feed.rss Fixtures.config { Fixtures.content with Notes = [ escNote ]; Projects = [] }
 
                 // Assert
                 Expect.stringContains rss "A &amp; B &lt;c&gt;" "title escaped"
@@ -345,9 +343,9 @@ let tests =
                       ProjectsIndex
                       FragrancesIndex
                       TagsIndex
-                      noteRoute "understanding-functional-effect-systems"
-                      projectRoute "fio"
-                      tagRoute (List.head (Content.allTags content)) ]
+                      noteShow
+                      ProjectShow(project (), None, None)
+                      TagShow("F#", [], []) ]
 
                 // Act & Assert
                 for route in indexable do
@@ -412,12 +410,12 @@ let tests =
 
             test "output is directory-style so both slash forms resolve" {
                 // Act
-                let note = Route.outputPath (noteRoute "understanding-functional-effect-systems")
+                let note = Route.outputPath noteShow
                 let home = Route.outputPath Home
                 let rss = Route.outputPath Rss
 
                 // Assert
-                Expect.equal note "notes/understanding-functional-effect-systems/index.html" "note"
+                Expect.equal note "notes/a-note/index.html" "note"
                 Expect.equal home "index.html" "home"
                 Expect.equal rss "rss.xml" "rss"
             }
@@ -437,31 +435,31 @@ let tests =
         testList "head metadata" [
             test "the home page title is descriptive and keyword-bearing" {
                 // Act
-                let html = Route.render config content Home
+                let html = render Home
 
                 // Assert
-                Expect.stringContains html "<title>itsdaniel — Daniel Larsen &#183; Software Engineer</title>" "home title"
+                Expect.stringContains html "<title>example — Ada Lovelace &#183; Analyst</title>" "home title"
             }
 
             test "other pages are suffixed with the site name" {
                 // Act
-                let html = Route.render config content NotesIndex
+                let html = render NotesIndex
 
                 // Assert
-                Expect.stringContains html "<title>Notes | itsdaniel</title>" "notes title"
+                Expect.stringContains html "<title>Notes | example</title>" "notes title"
             }
 
             test "canonical urls have no trailing slash" {
                 // Act
-                let html = Route.render config content NotesIndex
+                let html = render NotesIndex
 
                 // Assert
-                Expect.stringContains html "<link rel=\"canonical\" href=\"https://itsdaniel.dk/notes\">" "canonical"
+                Expect.stringContains html "<link rel=\"canonical\" href=\"https://example.com/notes\">" "canonical"
             }
 
             test "articles are declared as og:type article" {
                 // Act
-                let html = Route.render config content (noteRoute "understanding-functional-effect-systems")
+                let html = render noteShow
 
                 // Assert
                 Expect.stringContains html "<meta property=\"og:type\" content=\"article\">" "og:type"
@@ -469,36 +467,40 @@ let tests =
 
             test "every page carries og:site_name and an image alt" {
                 // Act
-                let html = Route.render config content Home
+                let html = render Home
 
                 // Assert
-                Expect.stringContains html "<meta property=\"og:site_name\" content=\"itsdaniel\">" "og:site_name"
+                Expect.stringContains html "<meta property=\"og:site_name\" content=\"example\">" "og:site_name"
 
                 Expect.stringContains
                     html
-                    "<meta property=\"og:image:alt\" content=\"itsdaniel — Daniel Larsen &#183; Software Engineer\">"
+                    "<meta property=\"og:image:alt\" content=\"example — Ada Lovelace &#183; Analyst\">"
                     "og:image:alt"
             }
 
             test "pages reference a 1200x630 share card — default for index, per-post for articles" {
                 // Act
-                let home = Route.render config content Home
-                let note = Route.render config content (noteRoute "understanding-functional-effect-systems")
+                let home = render Home
+                let article = render noteShow
 
                 // Assert
-                Expect.stringContains home "<meta property=\"og:image\" content=\"https://itsdaniel.dk/og/default.png\">" "home default card"
+                Expect.stringContains
+                    home
+                    "<meta property=\"og:image\" content=\"https://example.com/og/default.png\">"
+                    "home default card"
+
                 Expect.stringContains home "<meta property=\"og:image:width\" content=\"1200\">" "width"
                 Expect.stringContains home "<meta property=\"og:image:height\" content=\"630\">" "height"
 
                 Expect.stringContains
-                    note
-                    "<meta property=\"og:image\" content=\"https://itsdaniel.dk/og/notes/understanding-functional-effect-systems.png\">"
+                    article
+                    "<meta property=\"og:image\" content=\"https://example.com/og/notes/a-note.png\">"
                     "per-note card"
             }
 
             test "the non-standard meta name=title is not emitted" {
                 // Act
-                let html = Route.render config content Home
+                let html = render Home
 
                 // Assert
                 Expect.isFalse (html.Contains "<meta name=\"title\"") "no meta name=title"
@@ -506,20 +508,25 @@ let tests =
 
             test "article pages emit article:* tags, one per note tag" {
                 // Arrange
-                let note = findNote "understanding-functional-effect-systems"
+                let n = note ()
+                let published = DateParser.toIsoDatetime n.Date
 
                 // Act
-                let html = Route.render config content (noteRoute note.Id)
+                let html = render noteShow
 
                 // Assert
-                Expect.stringContains html $"<meta property=\"article:published_time\" content=\"{DateParser.toIsoDatetime note.Date}\">" "published_time"
-                Expect.stringContains html "<meta property=\"article:author\" content=\"Daniel Larsen\">" "author"
-                Expect.equal (matches "property=\"article:tag\" content=\"([^\"]*)\"" html) note.Tags "one meta per tag, in order"
+                Expect.stringContains
+                    html
+                    $"<meta property=\"article:published_time\" content=\"{published}\">"
+                    "published_time"
+
+                Expect.stringContains html "<meta property=\"article:author\" content=\"Ada Lovelace\">" "author"
+                Expect.equal (matches "property=\"article:tag\" content=\"([^\"]*)\"" html) n.Tags "one meta per tag"
             }
 
             test "non-article pages emit no article:* tags" {
                 // Act
-                let html = Route.render config content Home
+                let html = render Home
 
                 // Assert
                 Expect.isFalse (html.Contains "property=\"article:") "home has no article tags"
@@ -529,7 +536,7 @@ let tests =
         testList "not found" [
             test "the 404 page keeps the site chrome" {
                 // Act
-                let body = Layouts.render (Views.NotFound.page config)
+                let body = Layouts.render (Views.NotFound.page Fixtures.config)
 
                 // Assert
                 Expect.stringContains body "Go to home" "cta"
@@ -539,7 +546,7 @@ let tests =
 
             test "the 404 page is marked noindex" {
                 // Act
-                let body = Layouts.render (Views.NotFound.page config)
+                let body = Layouts.render (Views.NotFound.page Fixtures.config)
 
                 // Assert
                 Expect.stringContains body "<meta name=\"robots\" content=\"noindex, follow\">" "noindex"
@@ -552,13 +559,13 @@ let tests =
                 let cases =
                     [ Home, "WebSite"
                       About, "Person"
-                      noteRoute "understanding-functional-effect-systems", "BlogPosting"
-                      projectRoute "fio", "CreativeWork" ]
+                      noteShow, "BlogPosting"
+                      ProjectShow(project (), None, None), "CreativeWork" ]
 
                 // Act
                 let parsed =
                     [ for route, expectedType in cases ->
-                        let el = ldNode expectedType (ldScript (Route.render config content route))
+                        let el = ldNode expectedType (ldScript (render route))
                         route, expectedType, el.GetProperty("@type").GetString() ]
 
                 // Assert
@@ -568,7 +575,7 @@ let tests =
 
             test "a note's BlogPosting carries an ImageObject, language, and keywords" {
                 // Act
-                let json = ldScript (Route.render config content (noteRoute "understanding-functional-effect-systems"))
+                let json = ldScript (render noteShow)
                 let bp = ldNode "BlogPosting" json
                 let image = bp.GetProperty "image"
 
@@ -577,7 +584,7 @@ let tests =
 
                 Expect.stringContains
                     (image.GetProperty("url").GetString())
-                    "/og/notes/understanding-functional-effect-systems.png"
+                    "/og/notes/a-note.png"
                     "image url is the OG card"
 
                 Expect.equal (image.GetProperty("width").GetInt32()) 1200 "image width"
@@ -587,7 +594,7 @@ let tests =
 
             test "an article's publisher is an Organization with a logo" {
                 // Act
-                let json = ldScript (Route.render config content (noteRoute "understanding-functional-effect-systems"))
+                let json = ldScript (render noteShow)
                 let publisher = (ldNode "BlogPosting" json).GetProperty "publisher"
 
                 // Assert
@@ -601,7 +608,7 @@ let tests =
 
             test "article pages carry a BreadcrumbList home -> section -> title" {
                 // Act
-                let json = ldScript (Route.render config content (noteRoute "understanding-functional-effect-systems"))
+                let json = ldScript (render noteShow)
                 let crumbs = ldNode "BreadcrumbList" json
 
                 let trail =
@@ -612,14 +619,14 @@ let tests =
                 // Assert
                 Expect.equal
                     trail
-                    [ 1, "Home"; 2, "Notes"; 3, "Understanding Functional Effect Systems" ]
+                    [ 1, "Home"; 2, "Notes"; 3, (note ()).Title ]
                     "breadcrumb trail"
             }
 
             test "website and person JSON-LD carry their headline fields" {
                 // Act
-                use wdoc = JsonDocument.Parse(JsonLd.website config)
-                use pdoc = JsonDocument.Parse(JsonLd.person config)
+                use wdoc = JsonDocument.Parse(JsonLd.website Fixtures.config)
+                use pdoc = JsonDocument.Parse(JsonLd.person Fixtures.config)
                 let inLanguage = wdoc.RootElement.GetProperty("inLanguage").GetString()
 
                 let knows =
@@ -822,33 +829,28 @@ let tests =
         testList "drafts" [
             test "a draft note is excluded from routes, RSS, and the sitemap" {
                 // Arrange
-                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-draft-" + System.Guid.NewGuid().ToString("N"))
-                let noteDir name = Path.Combine(tmp, "notes", name)
-                Directory.CreateDirectory(noteDir "live") |> ignore
-                Directory.CreateDirectory(noteDir "hidden") |> ignore
-                File.WriteAllText(Path.Combine(noteDir "live", "index.md"), "---\ntitle: Live\ndescription: D\ndate: 2024-01-02\n---\nprose\n")
-                File.WriteAllText(Path.Combine(noteDir "hidden", "index.md"), "---\ntitle: Hidden\ndescription: D\ndate: 2024-01-03\ndraft: true\n---\nprose\n")
+                let files =
+                    Fixtures.requiredPageFiles
+                    @ [ "notes/live/index.md", "---\ntitle: Live\ndescription: D\ndate: 2024-01-02\n---\nprose\n"
+                        "notes/hidden/index.md",
+                        "---\ntitle: Hidden\ndescription: D\ndate: 2024-01-03\ndraft: true\n---\nprose\n" ]
 
-                for id in SiteContent.requiredPages do
-                    let dir = Path.Combine(tmp, "pages", id)
-                    Directory.CreateDirectory dir |> ignore
-                    File.WriteAllText(Path.Combine(dir, "index.md"), $"---\ntitle: {id}\ndescription: D\n---\nbody\n")
+                // Act
+                let result = Fixtures.withContentRoot files SiteContent.load
 
-                try
-                    // Act
-                    let result = SiteContent.load { ContentRoot = tmp; GrammarRoot = contentPaths.GrammarRoot }
-
-                    // Assert
-                    match result with
-                    | Error errs -> failtestf "load failed: %s" (String.concat "; " errs)
-                    | Ok loaded ->
-                        Expect.isFalse (loaded.Notes |> List.exists (fun n -> n.Id = "hidden")) "draft absent from content.Notes"
-                        Expect.isFalse (hasNoteRoute loaded "hidden") "no route for the draft"
-                        Expect.isFalse ((Feed.rss config loaded).Contains "hidden") "draft absent from RSS"
-                        Expect.isFalse ((Feed.sitemap config (Route.sitemapEntries loaded)).Contains "hidden") "draft absent from the sitemap"
-                        Expect.isTrue (hasNoteRoute loaded "live") "the published note still has a route"
-                finally
-                    Directory.Delete(tmp, true)
+                // Assert
+                match result with
+                | Error errs -> failtestf "load failed: %s" (String.concat "; " errs)
+                | Ok loaded ->
+                    let rss = Feed.rss Fixtures.config loaded
+                    let sitemap = Feed.sitemap Fixtures.config (Route.sitemapEntries loaded)
+                    Expect.isFalse
+                        (loaded.Notes |> List.exists (fun n -> n.Id = "hidden"))
+                        "draft absent from content.Notes"
+                    Expect.isFalse (hasNoteRoute loaded "hidden") "no route for the draft"
+                    Expect.isFalse (rss.Contains "hidden") "draft absent from RSS"
+                    Expect.isFalse (sitemap.Contains "hidden") "draft absent from the sitemap"
+                    Expect.isTrue (hasNoteRoute loaded "live") "the published note still has a route"
             }
         ]
     ]
