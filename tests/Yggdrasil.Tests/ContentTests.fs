@@ -974,7 +974,8 @@ let tests =
 
             test "a page other than home and about is rejected" {
                 // Act
-                let errors = loadErrors (withPages [ "pages/uses/index.md", "---\ntitle: Uses\ndescription: D\n---\nbody\n" ])
+                let page = "---\ntitle: Uses\ndescription: D\n---\nbody\n"
+                let errors = loadErrors (withPages [ "pages/uses/index.md", page ])
 
                 // Assert
                 Expect.stringContains errors "unknown page \"uses\"" "names the page"

@@ -151,19 +151,24 @@ effective immediately); revert the commit afterwards — restore the site first,
   [`assets/grammars/README.md`](assets/grammars/README.md).
 - **An unknown frontmatter or fragrance key fails the build**, so `drafts: true` can't silently publish.
   Each collection accepts only its own keys — a note with `repoURL` is an error too.
+- **Every name under `content/` becomes a URL, so it must be a slug**: lowercase letters, digits and single
+  hyphens. Whatever the loader would otherwise pass over fails the build instead — a stray file, an
+  `Index.md`, a `.yml` fragrance, an unknown folder or page. Names starting with a dot are ignored.
 - Highlighting emits light colours inline and dark ones as `--tm-dark*` variables that `app.css`
   promotes under `html.dark`. Both slots are Catppuccin Frappé (`Themes` in `Highlight.fs`), so code
   looks the same in either site theme — hence the copy button is styled light-on-dark unconditionally.
-- **Source PNGs must live next to their Markdown** in `content/`: the image rewrite reads their real
-  dimensions at build time and points the rendered `<img>` at the prebuilt `.webp` under
-  `static/images/`.
+- **Source PNGs must live next to their Markdown** in `content/`, not in a subfolder: the image rewrite
+  reads their real dimensions at build time and points the rendered `<img>` at the prebuilt `.webp` under
+  `static/images/`, named after the file alone.
 - `assets/css/app.css` carries two edits over a stock Tailwind entry — the `@source` scan of
   `src/Yggdrasil.Web`, and the dark-mode block targeting the `.tm` highlight wrapper.
 - The footer year is frozen at generate time; rebuild to refresh it.
 - **OG share cards render from TTF, not the WOFF2 the site serves.** `SkiaSharp.NativeAssets.Linux.NoDependencies`
   ships without Brotli, so `SKTypeface.FromFile` can't decode WOFF2 on Linux. The three faces the cards
   use live as lossless TTF conversions under `assets/fonts/` — a build input, never copied into `dist/`.
-  macOS Skia reads WOFF2 directly; TTF keeps the Linux CI generate working too.
+  macOS Skia reads WOFF2 directly; TTF keeps the Linux CI generate working too. The faces are Latin
+  subsets, so a title or tag with any other character (`→`, `λ`) fails the build rather than drawing an
+  empty box.
 
 ## Licensing
 

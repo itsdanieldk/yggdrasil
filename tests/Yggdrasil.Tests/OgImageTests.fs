@@ -52,7 +52,8 @@ let tests =
 
             try
                 // Act
-                OgImage.generateAll config fontsDir tmp content.Notes content.Projects
+                let result = OgImage.generateAll config fontsDir tmp content.Notes content.Projects
+                Expect.isOk result "every card is drawn"
 
                 // Assert
                 for rel in cards do
@@ -73,7 +74,7 @@ let tests =
 
             try
                 // Act
-                OgImage.generateAll Fixtures.config fontsDir tmp notes []
+                Expect.isOk (OgImage.generateAll Fixtures.config fontsDir tmp notes []) "every card is drawn"
 
                 // Assert
                 for n in notes do
@@ -81,5 +82,28 @@ let tests =
                     Expect.equal (pngSize file) (1200, 630) $"{n.Id} is 1200x630"
             finally
                 Directory.Delete(tmp, true)
+        }
+
+        test "text the card font cannot draw is an error naming the characters, not an empty box" {
+            // Arrange
+            let tmp = mkTmp ()
+            let notes = [ noteWith "arrow" "F# → Scala" [ "λ-calculus" ] ]
+
+            try
+                // Act
+                let result = OgImage.generateAll Fixtures.config fontsDir tmp notes []
+
+                // Assert
+                match result with
+                | Ok() -> failtest "expected the missing glyphs to be reported"
+                | Error errors ->
+                    let joined = String.concat "\n" errors
+                    Expect.stringContains joined "/og/notes/arrow.png" "names the card"
+                    Expect.stringContains joined "\"→\"" "names the character in the title"
+                    Expect.stringContains joined "\"λ\"" "names the character in the tag"
+                    Expect.isFalse (Directory.Exists tmp) "draws nothing when a card would be broken"
+            finally
+                if Directory.Exists tmp then
+                    Directory.Delete(tmp, true)
         }
     ]
