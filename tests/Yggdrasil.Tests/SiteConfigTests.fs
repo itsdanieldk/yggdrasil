@@ -82,6 +82,26 @@ pages:
                         Expect.stringContains joined field $"names the missing {field}")
         }
 
+        test "home and about are described by their own frontmatter, so pages holds only the index pages" {
+            // Arrange
+            let indexPagesOnly =
+                minimal
+                    .Replace("  home: { title: Home, description: d }\n", "")
+                    .Replace("  about: { title: About, description: d }\n", "")
+
+            // Act & Assert
+            withConfig indexPagesOnly (function
+                | Ok _ -> ()
+                | Error es -> failtestf "expected Ok, got: %s" (String.concat "; " es))
+        }
+
+        test "a pages key other than the four index pages is rejected" {
+            // Arrange & Act & Assert
+            withConfig (minimal + "  blog: { title: Blog, description: d }\n") (function
+                | Ok _ -> failtest "an unknown page key should not be silently ignored"
+                | Error es -> Expect.stringContains (String.concat "\n" es) "blog" "names the key")
+        }
+
         test "a missing page key is named" {
             // Arrange & Act & Assert
             withConfig (minimal.Replace("  tags: { title: Tags, description: d }\n", "")) (function
