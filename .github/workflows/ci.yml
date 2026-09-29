@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes to the repository: the deploy reaches Vercel with its own token.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -60,31 +64,7 @@ jobs:
 
       - name: Check the output
         shell: bash
-        run: |
-          set -euo pipefail
-          fail() { echo "::error::$1"; exit 1; }
-
-          [ -f dist/index.html ] || fail "dist/index.html missing"
-          [ -f dist/404.html ]   || fail "dist/404.html missing"
-
-          html=$(find dist -name '*.html' | wc -l | tr -d ' ')
-          [ "$html" -ge 15 ] || fail "expected at least 15 HTML files, found $html"
-
-          css=$(wc -c < dist/assets/css/app.css | tr -d ' ')
-          [ "$css" -gt 20000 ] || fail "app.css is only ${css} bytes; Tailwind likely did not scan the views"
-
-          js=$(wc -c < dist/assets/js/app.js | tr -d ' ')
-          [ "$js" -gt 0 ] || fail "app.js is empty; esbuild did not run"
-
-          cards=$(find dist/og -name '*.png' | wc -l | tr -d ' ')
-          [ "$cards" -ge 3 ] || fail "expected at least 3 OG cards, found $cards"
-
-          for feed in rss.xml sitemap-0.xml sitemap-index.xml; do
-            python3 -c "import xml.etree.ElementTree as E,sys; E.parse('dist/$feed')" \
-              || fail "dist/$feed is not well-formed XML"
-          done
-
-          echo "ok: ${html} HTML files, ${cards} OG cards, ${css} bytes CSS, ${js} bytes JS"
+        run: bash scripts/check-dist.sh dist
 
   deploy:
     needs: [test, generate]
@@ -113,14 +93,20 @@ jobs:
           path: .bin
           key: tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/Yggdrasil.Generate/Assets.fs') }}
 
+      # Pinned, because it runs with the production token: a new release is adopted by editing this line, not by
+      # whatever npm serves on the next push.
       - name: Install the Vercel CLI
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@61.0.0
 
       - name: Pull project settings
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      # vercel build generates the site afresh, so the generate job's checks say nothing about these files.
+      - name: Check the output
+        run: bash scripts/check-dist.sh .vercel/output/static
 
       # --skip-domain keeps the production domain on the previous deployment until the smoke test passes;
       # without it the alias moves first and a broken build is live before anything checks it.
@@ -143,7 +129,10 @@ jobs:
           [ -n "${VERCEL_BYPASS:-}" ] || fail "VERCEL_AUTOMATION_BYPASS_SECRET is not set — enable Protection Bypass for Automation in Vercel and add the secret to the repo"
           bypass=(-H "x-vercel-protection-bypass: $VERCEL_BYPASS")
 
-          code=$(curl -sS -o /dev/null -w '%{http_code}' "${bypass[@]}" "$url/")
+          # The HTTP status of $url$1, saving the body to $2 when one is given.
+          status() { curl -sS -o "${2:-/dev/null}" -w '%{http_code}' "${bypass[@]}" "$url$1"; }
+
+          code=$(status /)
           [ "$code" = "200" ] || fail "home page returned HTTP $code"
 
           headers=$(curl -sSI "${bypass[@]}" "$url/")
@@ -151,10 +140,32 @@ jobs:
             grep -iq "^$header:" <<< "$headers" || fail "$header missing — the vercel.json translation dropped it"
           done
 
-          code=$(curl -sS -o /dev/null -w '%{http_code}' "${bypass[@]}" "$url/about")
+          code=$(status /about)
           [ "$code" = "200" ] || fail "/about returned HTTP $code — the directory index did not resolve"
 
-          echo "ok: staged deployment serves home and /about with security headers intact"
+          feed="$RUNNER_TEMP/rss.xml"
+          code=$(status /rss.xml "$feed")
+          [ "$code" = "200" ] || fail "/rss.xml returned HTTP $code"
+
+          # An article, taken from the feed so the check follows the content rather than naming a note.
+          article=$(python3 -c 'import sys, urllib.parse, xml.etree.ElementTree as E; print(urllib.parse.urlparse(E.parse(sys.argv[1]).find("channel/item/link").text).path)' "$feed") \
+            || fail "/rss.xml has no item to request"
+          code=$(status "$article")
+          [ "$code" = "200" ] || fail "$article, the first feed item, returned HTTP $code"
+
+          css="$RUNNER_TEMP/app.css"
+          code=$(status /assets/css/app.css "$css")
+          [ "$code" = "200" ] && [ -s "$css" ] || fail "/assets/css/app.css returned HTTP $code or an empty body"
+
+          code=$(status /_vercel/insights/script.js)
+          [ "$code" = "200" ] || fail "/_vercel/insights/script.js returned HTTP $code — is Web Analytics enabled for the project?"
+
+          missing="$RUNNER_TEMP/missing.html"
+          code=$(status /this-page-does-not-exist "$missing")
+          [ "$code" = "404" ] || fail "a missing page returned HTTP $code instead of 404"
+          grep -q "Page Not Found" "$missing" || fail "a missing page was not served the site's 404.html"
+
+          echo "ok: staged deployment serves pages, an article, the feed, CSS, analytics and the 404 page, with security headers intact"
 
       - name: Promote to production
         run: vercel promote "${{ steps.deploy.outputs.url }}" --yes --token=${{ secrets.VERCEL_TOKEN }}

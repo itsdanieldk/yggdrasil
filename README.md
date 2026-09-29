@@ -28,7 +28,9 @@ works; the deploy target here is Vercel.
 ## Requirements
 
 .NET 10 SDK, pinned in `global.json`. On first run the generator downloads the standalone **Tailwind
-4.3.3** and **esbuild 0.28.1** binaries into `.bin/`.
+4.3.3** and **esbuild 0.28.1** binaries into `.bin/`, and rejects any download that doesn't match its
+checksum pinned in [`Assets.fs`](src/Yggdrasil.Generate/Assets.fs) — so bumping either version means
+updating its pins too.
 
 Platforms are bounded by Tailwind's standalone releases — macOS, Linux (glibc and musl) and Windows,
 on x64 and arm64; anything else fails immediately, naming the detected platform. CI runs the full
@@ -112,23 +114,26 @@ collection you'll want to delete.
 
 The site is built in CI and uploaded **prebuilt** — Vercel's build image has no .NET, so the
 generator cannot run there. The `deploy` job in [`ci.yml`](.github/workflows/ci.yml) ships with
-`vercel deploy --prebuilt`, gated on `needs: [test, generate]` — so CI is the only path to production,
-and a commit that fails `dotnet test` cannot deploy.
+`vercel deploy --prebuilt`, gated on `needs: [test, generate]`, and `vercel.json` turns off Vercel's own
+Git deployments — so CI is the only path to production, and a commit that fails `dotnet test` cannot
+deploy. `vercel build` generates the site again, so the job reruns
+[`scripts/check-dist.sh`](scripts/check-dist.sh) on its output — the files that actually ship.
 
 The upload uses `--skip-domain`, so the new deployment is not live yet. The job smoke-tests its unique
-URL and only then runs `vercel promote`; a deployment that fails the smoke test never reaches the domain,
-and production stays on the previous one.
+URL — pages, an article, the feed, the stylesheet, the analytics script, the 404 page and the security
+headers — and only then runs `vercel promote`; a deployment that fails the smoke test never reaches the
+domain, and production stays on the previous one.
 
 One-time setup:
 
 1. Repository secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` — the latter two from
    `.vercel/project.json` after `vercel link`, or the project settings page.
-2. Turn off the Git integration's production deploys, or every push deploys twice (Vercel's ungated
-   one fails anyway for lack of `dotnet`).
-3. Set `SITE_URL` in the Vercel environment if it differs from `site.yaml`'s `url`.
-4. Repository secret `VERCEL_AUTOMATION_BYPASS_SECRET` — generate it under **Settings → Deployment
+2. Set `SITE_URL` in the Vercel environment if it differs from `site.yaml`'s `url`.
+3. Repository secret `VERCEL_AUTOMATION_BYPASS_SECRET` — generate it under **Settings → Deployment
    Protection → Protection Bypass for Automation** and copy the value into a GitHub Actions secret of
    the same name.
+4. Enable **Web Analytics** for the project. Every page loads `/_vercel/insights/script.js`, which 404s
+   while analytics is off, and the smoke test fails the deploy on that 404.
 
 > **Deployment Protection makes the deploy URL 302.** With it enabled, the unique `*.vercel.app`
 > deploy URL redirects unauthenticated requests to an SSO login, so the smoke test would see `302`

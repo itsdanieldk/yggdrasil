@@ -2,6 +2,7 @@ module Yggdrasil.Tests.AssetsTests
 
 open Yggdrasil.Generate
 
+open System.IO
 open System.Runtime.InteropServices
 
 open Expecto
@@ -32,6 +33,16 @@ let tests =
                         Expect.equal a.EsbuildPkg esbuild "esbuild package"
                     | Error e -> failtestf "expected Ok for %s, got: %s" name e
                 }
+
+            test "every supported platform has both of its downloads pinned" {
+                // Act & Assert
+                for name, os, arch, musl, _, _ in cases do
+                    match Assets.resolveAssets os arch musl with
+                    | Ok a ->
+                        Expect.equal a.TailwindSha256.Length 64 $"{name}: tailwind pinned by SHA-256"
+                        Expect.stringStarts a.EsbuildIntegrity "sha512-" $"{name}: esbuild pinned by npm integrity"
+                    | Error e -> failtestf "expected Ok for %s, got: %s" name e
+            }
 
             test "Windows arm64 falls back to the x64 pair" {
                 // Act
@@ -83,6 +94,32 @@ let tests =
                 match result with
                 | Ok a -> failtestf "expected Error, got %s" a.TailwindAsset
                 | Error e -> Expect.stringContains e "FreeBSD 14.0" "names the detected OS"
+            }
+        ]
+
+        testList "digest" [
+            test "a download is hashed in the format of the pin it is checked against" {
+                // Arrange
+                let path = Path.GetTempFileName()
+
+                // Act
+                let sha256, integrity =
+                    try
+                        File.WriteAllText(path, "abc")
+                        Assets.digest (String.replicate 64 "0") path, Assets.digest "sha512-" path
+                    finally
+                        File.Delete path
+
+                // Assert — the standard test vectors for "abc".
+                Expect.equal
+                    sha256
+                    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+                    "a Tailwind pin: SHA-256 as lowercase hex"
+
+                Expect.equal
+                    integrity
+                    "sha512-3a81oZNherrMQXNJriBBMRLm+k6JqX6iCp7u5ktV05ohkpkqJ0/BqDa6PCOj/uu9RU1EI2Q86A4qmslPpUyknw=="
+                    "an esbuild pin: npm's integrity, SHA-512 as base64"
             }
         ]
     ]
