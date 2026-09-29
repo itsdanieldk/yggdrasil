@@ -91,6 +91,11 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
+    # Upload and promote are separate steps, so two quick pushes could otherwise promote the older build
+    # last. Queued runs wait, and a newer pending run supersedes an older one.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -117,13 +122,15 @@ jobs:
       - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Deploy
+      # --skip-domain keeps the production domain on the previous deployment until the smoke test passes;
+      # without it the alias moves first and a broken build is live before anything checks it.
+      - name: Deploy (not yet live)
         id: deploy
         run: |
           set -euo pipefail
-          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --prebuilt --prod --skip-domain --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "deployed to $url"
+          echo "staged at $url"
 
       - name: Smoke-test the deployment
         env:
@@ -147,4 +154,21 @@ jobs:
           code=$(curl -sS -o /dev/null -w '%{http_code}' "${bypass[@]}" "$url/about")
           [ "$code" = "200" ] || fail "/about returned HTTP $code — the directory index did not resolve"
 
-          echo "ok: home and /about serve 200 with security headers intact"
+          echo "ok: staged deployment serves home and /about with security headers intact"
+
+      - name: Promote to production
+        run: vercel promote "${{ steps.deploy.outputs.url }}" --yes --token=${{ secrets.VERCEL_TOKEN }}
+
+      # The custom domain is public, so no bypass header. The deployment already passed the smoke test, so
+      # a failure here means the alias swap itself went wrong.
+      - name: Check the live domain
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          for path in / /about; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://itsdaniel.dk$path")
+            [ "$code" = "200" ] || fail "https://itsdaniel.dk$path returned HTTP $code after promotion"
+          done
+
+          echo "ok: itsdaniel.dk serves home and /about"
