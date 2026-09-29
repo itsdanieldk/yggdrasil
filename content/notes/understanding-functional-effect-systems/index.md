@@ -2,7 +2,7 @@
 title: "Understanding Functional Effect Systems"
 description: "What functional effect systems are, why they matter, and how they make side effects composable."
 date: 2026-04-22
-updatedDate: 2026-07-13
+updatedDate: 2026-09-29
 tags: ["functional programming", "F#", "effect system"]
 ---
 
@@ -131,4 +131,4 @@ What all three share is the same core insight: treat effects as values, compose 
 
 If the principles of functional programming are about how to *think* about code, effect systems are about building real programs without abandoning those principles. Separation of effects becomes a guarantee, enforced by types and managed by a runtime, instead of a convention that survives only as long as the team's discipline.
 
-I should be honest about where I stand, though: I don't use effect systems at work. My day job is C#, and it's `Task` and async/await all the way down. Introducing something like FIO there would be a hard sell — not because the ideas are wrong, but because the distance from idiomatic C# is real, and a codebase has to stay maintainable for the whole team, not just the one person excited about effect types. So FIO remains a nights-and-weekends project. What transfers is the mindset: I'm far more deliberate about where side effects live, even in C#.
+I should be honest about where I stand, though: I don't use effect systems at work. My day job is Elixir, where concurrency means processes and supervision trees rather than typed effects — the BEAM answers many of the same questions differently: isolate the failure in a process, let it crash, have a supervisor restart it. So FIO remains a nights-and-weekends project. What transfers is the mindset: I'm far more deliberate about where side effects live, and in Elixir that's discipline, not something the compiler enforces.

@@ -170,6 +170,10 @@ module Site =
                     if not (dto.Pages.ContainsKey key) then
                         errors.Add $"site.yaml: pages.{key}: required page metadata is missing"
 
+                for kv in dto.Pages do
+                    if obj.ReferenceEquals(kv.Value, null) then
+                        errors.Add $"site.yaml: pages.{kv.Key}: title and description are missing"
+
                 dto.Pages
                 |> Seq.filter (fun kv -> not (obj.ReferenceEquals(kv.Value, null)))
                 |> Seq.map (fun kv ->
@@ -206,11 +210,7 @@ module Site =
             try
                 parse (deserializer.Deserialize<SiteDto>(File.ReadAllText path))
             with ex ->
-                let rec detail (ex: exn) =
-                    match ex.InnerException with
-                    | null -> ex.Message
-                    | inner -> ex.Message + " → " + detail inner
-                Error [ $"{path}: invalid YAML: {detail ex}" ]
+                Error [ $"{path}: invalid YAML: {Util.exceptionDetail ex}" ]
 
     let absoluteUrl (config: SiteConfig) (path: string) =
         config.BaseUrl.TrimEnd '/' + "/" + path.TrimStart '/'

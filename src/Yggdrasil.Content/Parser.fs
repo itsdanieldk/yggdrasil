@@ -1,6 +1,7 @@
 namespace Yggdrasil.Content
 
 open System
+open System.Collections.Generic
 open System.Text.RegularExpressions
 
 open YamlDotNet.Serialization
@@ -44,6 +45,30 @@ module Parser =
             Ok(deserializer.Deserialize<FrontmatterDto> frontmatter)
         with ex ->
             Error $"{path}: invalid YAML frontmatter: {ex.Message}"
+
+    let private keyReader = DeserializerBuilder().Build()
+
+    let pageKeys = set [ "title"; "description"; "heading"; "emoji" ]
+
+    let noteKeys =
+        set [ "title"; "description"; "date"; "updatedDate"; "tags"; "draft"; "featured" ]
+
+    let projectKeys = Set.union noteKeys (set [ "demoURL"; "repoURL" ])
+
+    let rejectUnknownKeys (path: string) (allowed: Set<string>) (yaml: string) =
+        let keys =
+            try
+                match keyReader.Deserialize<Dictionary<string, obj>> yaml with
+                | null -> []
+                | mapping -> List.ofSeq mapping.Keys
+            with _ ->
+                []
+
+        match keys |> List.filter (allowed.Contains >> not) with
+        | [] -> Ok()
+        | unknown ->
+            let names = unknown |> List.map (fun key -> $"\"{key}\"") |> String.concat ", "
+            Error $"{path}: unknown key(s) {names} — check the spelling"
 
     let private required path field (value: string) =
         if isNull value then

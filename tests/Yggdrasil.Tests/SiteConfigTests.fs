@@ -89,6 +89,13 @@ pages:
                 | Error es -> Expect.stringContains (String.concat "\n" es) "pages.tags" "names the missing key")
         }
 
+        test "a page key with an empty body is caught here, not by the renderer" {
+            // Arrange & Act & Assert
+            withConfig (minimal.Replace("  tags: { title: Tags, description: d }", "  tags:")) (function
+                | Ok _ -> failtest "an empty page section should not reach SiteConfig.Page"
+                | Error es -> Expect.stringContains (String.concat "\n" es) "pages.tags" "names the empty key")
+        }
+
         test "a blank required field is rejected like a missing one" {
             // Arrange & Act & Assert
             withConfig (minimal.Replace("author: A Person", "author: \"   \"")) (function

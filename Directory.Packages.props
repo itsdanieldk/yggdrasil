@@ -7,23 +7,16 @@
 
   <ItemGroup>
     <PackageVersion Include="FSharp.Core" Version="10.1.302" />
-
-    <!-- Yggdrasil.Content -->
-    <PackageVersion Include="Markdig" Version="1.3.2" />
+    <PackageVersion Include="Markdig" Version="1.4.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <PackageVersion Include="TextMateSharp" Version="2.0.4" />
-
-    <!-- Yggdrasil.Web -->
     <PackageVersion Include="Giraffe.ViewEngine" Version="1.4.0" />
-
-    <!-- Yggdrasil.Generate -->
-    <PackageVersion Include="SkiaSharp" Version="4.150.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.150.1" />
-
+    <PackageVersion Include="SkiaSharp" Version="4.153.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.0" />
     <PackageVersion Include="Expecto" Version="11.1.0" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
-    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.16.0" />
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.16.1" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
   </ItemGroup>
 
 </Project>

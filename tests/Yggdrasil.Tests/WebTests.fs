@@ -667,6 +667,41 @@ let tests =
                 finally
                     if Directory.Exists tmp then Directory.Delete(tmp, true)
             }
+
+            test "a failure in the asset phase is reported, not thrown out of main" {
+                // Arrange
+                let tmp = Path.Combine(Path.GetTempPath(), "yggdrasil-assets-" + System.Guid.NewGuid().ToString("N"))
+                Directory.CreateDirectory tmp |> ignore
+
+                try
+                    File.Copy(Path.Combine(projectRoot, "global.json"), Path.Combine(tmp, "global.json"))
+                    File.Copy(Path.Combine(projectRoot, "site.yaml"), Path.Combine(tmp, "site.yaml"))
+
+                    let grammars = Path.Combine(tmp, "assets", "grammars")
+                    Directory.CreateDirectory grammars |> ignore
+
+                    for file in Directory.GetFiles contentPaths.GrammarRoot do
+                        File.Copy(file, Path.Combine(grammars, Path.GetFileName file))
+
+                    for id in SiteContent.requiredPages do
+                        let dir = Path.Combine(tmp, "content", "pages", id)
+                        Directory.CreateDirectory dir |> ignore
+                        File.WriteAllText(Path.Combine(dir, "index.md"), $"---\ntitle: {id}\ndescription: D\n---\nbody\n")
+
+                    let loaded =
+                        SiteContent.load { ContentRoot = Path.Combine(tmp, "content"); GrammarRoot = grammars }
+
+                    Expect.isTrue (Result.isOk loaded) "the content itself loads"
+
+                    // Act
+                    let exitCode = Program.main [| tmp |]
+
+                    // Assert
+                    Expect.equal exitCode 1 "the missing static/ directory fails the build"
+                    Expect.isTrue (Directory.Exists(Path.Combine(tmp, "dist"))) "it got as far as the asset phase"
+                finally
+                    if Directory.Exists tmp then Directory.Delete(tmp, true)
+            }
         ]
 
         testList "reference verification" [

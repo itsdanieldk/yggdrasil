@@ -2,13 +2,13 @@
 title: "Principles of Functional Programming"
 description: "The core functional principles and why they matter."
 date: 2025-11-02
-updatedDate: 2026-07-13
+updatedDate: 2026-09-29
 tags: ["functional programming", "F#", "software design"]
 ---
 
 I spent my early programming years writing Java. It got the job done, but there was a lot of ceremony: class hierarchies, verbose patterns, state scattered across objects. Then a course at DTU, [02157 Functional Programming](https://kurser.dtu.dk/course/02157), put F# in front of me, and the contrast was immediate. I was writing less code, and the compiler caught my mistakes before I could even run the program.
 
-That course changed how I write all code, not just the functional kind. This post walks through the principles that stuck. The examples are in F#, and since I currently build backend systems for EV charging for a living, a few of them borrow that domain. The principles themselves apply in any language.
+That course changed how I write all code, not just the functional kind. This post walks through the principles that stuck. The examples are in F#, and since I currently build backend systems for mission-critical communications for a living, a few of them borrow that domain. The principles themselves apply in any language.
 
 ## Pure Functions
 
@@ -21,23 +21,23 @@ let add x y = x + y // Always predictable
 To see why that matters, here's the impure alternative:
 
 ```fsharp
-let mutable tariff = 2.50 // Price per kWh in DKK
+let mutable rate = 2.50 // Airtime charged per minute, in DKK
 
-let sessionCost kWh =
-    tariff <- tariff + 0.25 // Modifies external state
-    kWh * tariff
+let callCost minutes =
+    rate <- rate + 0.25 // Modifies external state
+    minutes * rate
 
-sessionCost 10.0 // 27.5
-sessionCost 10.0 // 30.0, different result, same input
+callCost 10.0 // 27.5
+callCost 10.0 // 30.0, different result, same input
 ```
 
-Every call bumps `tariff`, so the result depends on when and how often you call it. Debugging code like this means reconstructing history. Compare:
+Every call bumps `rate`, so the result depends on when and how often you call it. Debugging code like this means reconstructing history. Compare:
 
 ```fsharp
-let sessionCost tariff kWh = kWh * tariff
+let callCost rate minutes = minutes * rate
 
-sessionCost 2.50 10.0 // 25.0
-sessionCost 2.50 10.0 // 25.0, always the same
+callCost 2.50 10.0 // 25.0
+callCost 2.50 10.0 // 25.0, always the same
 ```
 
 The pure version takes everything it needs as arguments. Testing it requires no setup: pass values in, check what comes out.
@@ -176,24 +176,24 @@ That said, explicit recursion isn't your everyday tool. Higher-order functions l
 
 ## Declarative Thinking
 
-Functional programming nudges you toward saying *what* you want rather than spelling out *how* to get there. Say you need the total energy delivered across completed charging sessions:
+Functional programming nudges you toward saying *what* you want rather than spelling out *how* to get there. Say you need the total airtime across completed calls:
 
 ```fsharp
-type Session = { KWh: float; Completed: bool }
+type Call = { Minutes: float; Completed: bool }
 
-let sessions =
-    [ { KWh = 12.5; Completed = true }
-      { KWh = 3.2; Completed = false }
-      { KWh = 20.1; Completed = true } ]
+let calls =
+    [ { Minutes = 12.5; Completed = true }
+      { Minutes = 3.2; Completed = false }
+      { Minutes = 20.1; Completed = true } ]
 ```
 
 An imperative approach:
 
 ```fsharp
 let mutable total = 0.0
-for session in sessions do
-    if session.Completed then
-        total <- total + session.KWh
+for call in calls do
+    if call.Completed then
+        total <- total + call.Minutes
 // total = 32.6
 ```
 
@@ -201,13 +201,13 @@ It works, but the intent is buried in mechanics. F# has a pipe operator (`|>`) t
 
 ```fsharp
 let total =
-    sessions
-    |> List.filter (fun s -> s.Completed)
-    |> List.sumBy (fun s -> s.KWh)
+    calls
+    |> List.filter (fun c -> c.Completed)
+    |> List.sumBy (fun c -> c.Minutes)
 // 32.6
 ```
 
-Take the sessions, keep the completed ones, sum the energy. Each step is explicit and independently testable.
+Take the calls, keep the completed ones, sum the airtime. Each step is explicit and independently testable.
 
 Step back and a pattern emerges across all of these ideas: FP programs are pipelines of small, composable transformations over immutable data. Pure functions make each step predictable, immutability guarantees the data holds still between steps, and composition connects them. What remains is modeling the data itself.
 
@@ -216,33 +216,33 @@ Step back and a pattern emerges across all of these ideas: FP programs are pipel
 Functional languages give you tools to model data precisely. The simplest example is `Option`, which represents the presence or absence of a value explicitly, replacing `null` entirely.
 
 ```fsharp
-let chargePoints = [ "CP-001"; "CP-002"; "CP-007" ]
+let radios = [ "RAD-001"; "RAD-002"; "RAD-007" ]
 
-let found = chargePoints |> List.tryFind (fun id -> id = "CP-007")
-// found : string option = Some "CP-007"
+let found = radios |> List.tryFind (fun id -> id = "RAD-007")
+// found : string option = Some "RAD-007"
 
-let missing = chargePoints |> List.tryFind (fun id -> id = "CP-042")
+let missing = radios |> List.tryFind (fun id -> id = "RAD-042")
 // missing : string option = None
 ```
 
 There's no `NullReferenceException` waiting to happen. The type says the value might be absent, and the compiler won't let you use it without handling both cases.
 
-`Option` is a *discriminated union*: a type with named cases. You can define your own to model domain state. A connector on a charge point, for instance, is always in exactly one of a few states:
+`Option` is a *discriminated union*: a type with named cases. You can define your own to model domain state. A radio on the network, for instance, is always in exactly one of a few states:
 
 ```fsharp
-type ConnectorState =
+type RadioState =
     | Available
-    | Charging of sessionId: string
+    | InCall of callId: string
     | Faulted of errorCode: int
 
 let describe state =
     match state with
-    | Available -> "Ready to charge"
-    | Charging sessionId -> $"Session {sessionId} in progress"
-    | Faulted code -> $"Out of order (error {code})"
+    | Available -> "Ready for calls"
+    | InCall callId -> $"Call {callId} in progress"
+    | Faulted code -> $"Out of service (error {code})"
 ```
 
-The `match` is exhaustive: add a `Reserved` case next sprint and the compiler points at every `match` that doesn't handle it. And there's no combination of boolean flags that means nothing, no "charging but also available" state. The business rule lives in the type, and the compiler enforces it.
+The `match` is exhaustive: add an `Emergency` case next sprint and the compiler points at every `match` that doesn't handle it. And there's no combination of boolean flags that means nothing, no "in a call but also available" state. The business rule lives in the type, and the compiler enforces it.
 
 ## Explicit Error Handling
 
@@ -261,17 +261,17 @@ match divide 10 2 with
 The caller can't ignore the error case; the type system forces the handling. Where this pays off is composition. Real code chains operations that can each fail, and without explicit errors you end up with nested `try/catch` or pyramids of `if`. With `Result`, you chain steps using `Result.bind`, and the first failure short-circuits the rest:
 
 ```fsharp
-let validateEnergy kWh =
-    if kWh > 0.0 then Ok kWh
-    else Error "Energy must be positive"
+let validateDuration minutes =
+    if minutes > 0.0 then Ok minutes
+    else Error "Duration must be positive"
 
-let validateCapacity kWh =
-    if kWh <= 150.0 then Ok kWh
-    else Error "Exceeds connector capacity"
+let validateLimit minutes =
+    if minutes <= 150.0 then Ok minutes
+    else Error "Exceeds the maximum call duration"
 
-12.5  |> validateEnergy |> Result.bind validateCapacity // Ok 12.5
--1.0  |> validateEnergy |> Result.bind validateCapacity // Error "Energy must be positive"
-200.0 |> validateEnergy |> Result.bind validateCapacity // Error "Exceeds connector capacity"
+12.5  |> validateDuration |> Result.bind validateLimit // Ok 12.5
+-1.0  |> validateDuration |> Result.bind validateLimit // Error "Duration must be positive"
+200.0 |> validateDuration |> Result.bind validateLimit // Error "Exceeds the maximum call duration"
 ```
 
 Each validation is a small function you can test on its own, and the pipeline carries the first error forward.
@@ -282,19 +282,19 @@ Keep your core logic pure and push side effects to the edges of your program. Bu
 
 ```fsharp
 // Pure core logic
-let sessionCost tariff kWh = kWh * tariff
+let callCost rate minutes = minutes * rate
 
 // Impure shell (I/O at the edges)
-let finalizeSession sessionId =
-    let session = loadSession sessionId // Side effect
-    let cost = sessionCost session.Tariff session.KWh // Pure
-    saveInvoice sessionId cost // Side effect
+let finalizeCall callId =
+    let call = loadCall callId // Side effect
+    let cost = callCost call.Rate call.Minutes // Pure
+    saveCallRecord callId cost // Side effect
 ```
 
-The pure `sessionCost` is trivial to test: pass in numbers, check the output. The impure `finalizeSession` is a thin wrapper that orchestrates I/O around it. When something breaks, you know which half to suspect.
+The pure `callCost` is trivial to test: pass in numbers, check the output. The impure `finalizeCall` is a thin wrapper that orchestrates I/O around it. When something breaks, you know which half to suspect.
 
 ## Why These Principles Matter
 
 Pure functions and immutability remove the bugs that come from hidden state. Testing stops requiring elaborate setup. Refactoring gets safer because each function can be understood on its own. And when you come back to the code months later, there are no invisible side effects to re-learn.
 
-Looking back, switching from Java to F# mattered less than what the switch taught me: favor data over objects, transformations over mutation, types over runtime checks. Most of my day-to-day work today is C#, and the habits carry over directly — records, exhaustive `switch` expressions, LINQ pipelines, I/O pushed to the edges. The principles travel even where the language doesn't.
+Looking back, switching from Java to F# mattered less than what the switch taught me: favor data over objects, transformations over mutation, types over runtime checks. Most of my day-to-day work today is Elixir, where half of that comes built in: data is immutable, and pattern matching and `|>` pipelines are simply how you write it. The other half doesn't — the compiler won't promise that a `case` covers every shape, and nothing stops a function deep in the core from doing I/O. That half I still carry over by hand. The principles travel; sometimes the language meets them halfway.
