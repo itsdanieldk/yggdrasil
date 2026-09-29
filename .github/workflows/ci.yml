@@ -157,15 +157,12 @@ jobs:
           code=$(status /assets/css/app.css "$css")
           [ "$code" = "200" ] && [ -s "$css" ] || fail "/assets/css/app.css returned HTTP $code or an empty body"
 
-          code=$(status /_vercel/insights/script.js)
-          [ "$code" = "200" ] || fail "/_vercel/insights/script.js returned HTTP $code — is Web Analytics enabled for the project?"
-
           missing="$RUNNER_TEMP/missing.html"
           code=$(status /this-page-does-not-exist "$missing")
           [ "$code" = "404" ] || fail "a missing page returned HTTP $code instead of 404"
           grep -q "Page Not Found" "$missing" || fail "a missing page was not served the site's 404.html"
 
-          echo "ok: staged deployment serves pages, an article, the feed, CSS, analytics and the 404 page, with security headers intact"
+          echo "ok: staged deployment serves pages, an article, the feed, CSS and the 404 page, with security headers intact"
 
       - name: Promote to production
         run: vercel promote "${{ steps.deploy.outputs.url }}" --yes --token=${{ secrets.VERCEL_TOKEN }}

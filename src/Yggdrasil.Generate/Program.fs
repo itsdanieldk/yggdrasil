@@ -49,9 +49,6 @@ let writeSite (config: SiteConfig) (content: SiteContent) (distDir: string) =
         |> List.ofSeq
         |> Error
 
-let private hostProvided =
-    Set [ "/_vercel/insights/script.js" ]
-
 let private referenceRegex =
     Regex "\\b(?:href|src)=\"([^\"]+)\"|\\bsrcset=\"([^\"]+)\""
 
@@ -73,7 +70,6 @@ let verifyReferences (distDir: string) =
         || reference.StartsWith '#'
         || [ "http://"; "https://"; "mailto:"; "data:" ]
            |> List.exists (fun scheme -> reference.StartsWith(scheme, StringComparison.Ordinal))
-        || hostProvided.Contains reference
 
     let problems = ResizeArray<string>()
 

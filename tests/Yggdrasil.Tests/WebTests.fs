@@ -803,11 +803,11 @@ let tests =
                     Expect.stringContains problems "/about" "without cleanUrls Vercel 404s this, so the build must too")
             }
 
-            test "external, host-provided and in-page references are skipped" {
+            test "external and in-page references are skipped" {
                 // Arrange
                 let refs =
                     """<a href="https://example.com">x</a><a href="mailto:a@b.c">y</a><a href="#top">z</a>"""
-                    + """<img src="data:image/gif;base64,R0lGOD"><script src="/_vercel/insights/script.js"></script>"""
+                    + """<img src="data:image/gif;base64,R0lGOD">"""
 
                 withDist [ "index.html", refs ] (fun root ->
                     // Act
@@ -815,6 +815,16 @@ let tests =
 
                     // Assert
                     Expect.isTrue (Result.isOk result) "nothing off-site is checked")
+            }
+
+            test "a path Vercel would add at build time is not exempt, since prebuilt deployments never serve it" {
+                // Arrange
+                withDist [ "index.html", """<script src="/_vercel/insights/script.js"></script>""" ] (fun root ->
+                    // Act
+                    let problems = Program.verifyReferences root |> expectProblems "Vercel-provided path"
+
+                    // Assert
+                    Expect.stringContains problems "/_vercel/insights/script.js" "a 404 on every page otherwise")
             }
 
             test "the committed site's real output resolves end to end" {
