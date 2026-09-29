@@ -408,6 +408,17 @@ let tests =
                     Expect.stringContains out (System.Net.WebUtility.HtmlEncode tag) (Util.slugifyTag tag)
             }
 
+            test "a page's emoji is set apart from its heading by the view" {
+                // Arrange
+                let home = { Fixtures.page "home" with Heading = "Hey"; Emoji = Some "X" }
+
+                // Act
+                let html = Route.render Fixtures.config { Fixtures.content with Home = home } Home
+
+                // Assert
+                Expect.stringContains html "Hey <span class=\"text-5xl\">X</span>" "one space before the emoji"
+            }
+
             test "output is directory-style so both slash forms resolve" {
                 // Act
                 let note = Route.outputPath noteShow

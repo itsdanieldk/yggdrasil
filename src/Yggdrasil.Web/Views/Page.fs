@@ -13,7 +13,9 @@ module Page =
         h1 [ _class $"animate font-semibold tracking-tight text-black dark:text-white {extraClass}" ] [
             txt page.Heading
             match page.Emoji with
-            | Some emoji -> span [ _class "text-5xl" ] [ txt emoji ]
+            | Some emoji ->
+                txt " "
+                span [ _class "text-5xl" ] [ txt emoji ]
             | None -> ()
         ]
 

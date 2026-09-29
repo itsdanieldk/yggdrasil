@@ -1,7 +1,7 @@
 ---
 title: "Home"
 description: "Software engineer writing about functional programming, distributed systems, Elixir, and .NET. By Daniel Larsen."
-heading: "Hey, it's Daniel! "
+heading: "Hey, it's Daniel!"
 emoji: "🪻"
 ---
 

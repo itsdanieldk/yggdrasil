@@ -864,6 +864,21 @@ let tests =
                 Expect.equal home.Emoji None "a blank emoji is absent"
             }
 
+            test "an optional value is trimmed like a required one, so spacing is left to the view" {
+                // Arrange
+                let files =
+                    [ "pages/home/index.md",
+                      "---\ntitle: Home\ndescription: D\nheading: \"Hey \"\nemoji: \" X \"\n---\nbody\n"
+                      "pages/about/index.md", "---\ntitle: About\ndescription: D\n---\nbody\n" ]
+
+                // Act
+                let home = (Fixtures.withContentRoot files SiteContent.load |> okOr).Home
+
+                // Assert
+                Expect.equal home.Heading "Hey" "the heading's trailing space is dropped"
+                Expect.equal home.Emoji (Some "X") "the emoji's padding is dropped"
+            }
+
             test "a malformed value names the value, not just the wrapper message" {
                 // Act
                 let yaml = "name: N\nhouse: H\nurl: https://example.com\nrating: 8,5\n"

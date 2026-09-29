@@ -145,8 +145,8 @@ Rather than nesting function calls or writing step-by-step procedures, you can c
 let double x = x * 2
 let increment x = x + 1
 
-let process = increment >> double // Increment, then double
-process 3 // 8
+let incrementThenDouble = increment >> double
+incrementThenDouble 3 // 8
 ```
 
 The `>>` operator feeds the output of the first function into the second, so the code states *what* transforms happen rather than the mechanics of passing values along.
@@ -213,7 +213,7 @@ Step back and a pattern emerges across all of these ideas: FP programs are pipel
 
 ## Algebraic Data Types and Pattern Matching
 
-Functional languages give you tools to model data precisely. The simplest example is `Option`, which represents the presence or absence of a value explicitly, replacing `null` entirely.
+Functional languages give you tools to model data precisely. The simplest example is `Option`, which represents the presence or absence of a value explicitly instead of hiding it behind `null`.
 
 ```fsharp
 let radios = [ "RAD-001"; "RAD-002"; "RAD-007" ]
@@ -225,7 +225,7 @@ let missing = radios |> List.tryFind (fun id -> id = "RAD-042")
 // missing : string option = None
 ```
 
-There's no `NullReferenceException` waiting to happen. The type says the value might be absent, and the compiler won't let you use it without handling both cases.
+There's no `NullReferenceException` waiting to happen. The type says the value might be absent, so you have to unwrap it before you can use it as a `string`, and unwrapping it with a `match` means handling both cases.
 
 `Option` is a *discriminated union*: a type with named cases. You can define your own to model domain state. A radio on the network, for instance, is always in exactly one of a few states:
 
@@ -242,7 +242,7 @@ let describe state =
     | Faulted code -> $"Out of service (error {code})"
 ```
 
-The `match` is exhaustive: add an `Emergency` case next sprint and the compiler points at every `match` that doesn't handle it. And there's no combination of boolean flags that means nothing, no "in a call but also available" state. The business rule lives in the type, and the compiler enforces it.
+The `match` is exhaustive: add an `Emergency` case next sprint and the compiler warns about every `match` that doesn't handle it. And there's no combination of boolean flags that means nothing, no "in a call but also available" state. The business rule lives in the type, and the compiler enforces it.
 
 ## Explicit Error Handling
 
@@ -258,7 +258,7 @@ match divide 10 2 with
 | Error msg -> printfn "Error: %s" msg
 ```
 
-The caller can't ignore the error case; the type system forces the handling. Where this pays off is composition. Real code chains operations that can each fail, and without explicit errors you end up with nested `try/catch` or pyramids of `if`. With `Result`, you chain steps using `Result.bind`, and the first failure short-circuits the rest:
+The caller can't get at the result without deciding what happens on failure; the error case is right there in the type. Where this pays off is composition. Real code chains operations that can each fail, and without explicit errors you end up with nested `try/catch` or pyramids of `if`. With `Result`, you chain steps using `Result.bind`, and the first failure short-circuits the rest:
 
 ```fsharp
 let validateDuration minutes =
